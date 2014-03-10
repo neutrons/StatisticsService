@@ -24,7 +24,7 @@ TODO List:
 
 
 Config related tasks:
-- Figure out global config options ( update rate for live listener, preserve events)
+- Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
 - Figure out beamline config options (beamline name, beamline prefix, which PV's to calculate)
 - Should the two sets of config options be in a single config file? Probably...
 - Make the code robust enough to handle improperly written config files (at least fail gracefully)
@@ -86,16 +86,31 @@ import os
 from optparse import OptionParser
 import ConfigParser
 
-#sys.path.append(os.environ['MANTIDPATH'])
-#MANTIDPATH env var should be set by the Mantid installer.
-#For now, just use a hard-coded path 
-sys.path.append('/home/xmr/mantid-build/bin')
 
-from mantid.simpleapi import *
-from mantid.api import IEventWorkspace
-from mantid.api import Run
-from mantid.api import PythonAlgorithm, AlgorithmFactory, WorkspaceProperty
-from mantid.kernel import Direction, logger
+# Try to figure out where Mantid is installed and set sys.path accordingly
+if os.environ.has_key('MANTIDPATH'):
+    #MANTIDPATH env var should be set by the Mantid installer.
+    sys.path.append( os.environ['MANTIDPATH'])
+
+# If the env var wasn't set, we'll just hope for the best.  It's possible
+# the PYTHONPATH variable has already been modified to include the 
+# Mantid libraries...
+try:
+    from mantid.simpleapi import *
+    from mantid.api import IEventWorkspace
+    from mantid.api import Run
+    from mantid.api import PythonAlgorithm, AlgorithmFactory, WorkspaceProperty
+    from mantid.kernel import Direction, logger
+except ImportError, e:
+    print """
+Failed to import the Mantid framework libraries.
+Please make sure that Mantid has been installed properly and that either the
+MANTIDPATH or PYTHONPATH environment variables include the directory where
+Mantid has been installed.
+"""
+    print "Aborting."
+    sys.exit(1)
+
 
 # pcaspy library for EPICS stuff
 # Again, using a hard-coded path
@@ -117,117 +132,6 @@ PV_Values = {}
 PROCESS_VARIABLES = []
 
 
-# -----------------------------------------------------------------------------
-# This is code for generating each particular PV.
-# Need to figure out how to organize this and automatically register it with
-# the PV_Functions and PV_Values dictionaries
-#
-# Note the function signature:  keyword arguments that we know we'll need are
-# mandatory.  The **extra_kwargs is there to soak up any other keywords the
-# main program may pass.  The main program is guaranteed to pass all arguments
-# as keyword args.  It will not use positional args.
-
-def calc_evtcnt( chunkWS, **extra_kwargs):
-    '''
-    Calculates the EVTCNT process variable.
-    '''
-    
-    # Note: We're operating on the chunkWS, which means we need to keep a
-    # running sum of the events in a static variable and add the events
-    # in chunkWS to it.  (And reset it to 0 when the run # changes.)
-    #
-    # Yes, this would be much easier to implement in the post-processing
-    # stage.  I'll work on that next.
-    
-    # The try...except paragraph initializes a couple of attributes on
-    # the function.  This is the python equivalent of static variables
-    try:
-        calc_evtcnt.run_num
-        calc_evtcnt.events
-    except AttributeError:
-        calc_evtcnt.run_num = chunkWS.getRunNumber()
-        calc_evtcnt.events = 0
-        
-    if calc_evtcnt.run_num != chunkWS.getRunNumber():
-        # new run - reset the event count
-        calc_evtcnt.events = 0
-        calc_evtcnt.run_num = chunkWS.getRunNumber()
-        
-    calc_evtcnt.events += chunkWS.getNumberEvents()
-    return calc_evtcnt.events
-    
-    
-# Register our PV function
-PV_Functions_Chunk['EVTCNT'] = calc_evtcnt
-      
-# -----------------------------------------------------------------------------
-
-def calc_runnum( chunkWS, **extra_kwargs):
-    '''
-    Calculates the RUNNUM process variable.
-    '''
-    
-    # This one is about as simple as it gets    
-    return chunkWS.getRunNumber()   
-    
-# Register our PV function
-PV_Functions_Chunk['RUNNUM'] = calc_runnum
-      
-# -----------------------------------------------------------------------------
-
-def calc_protoncharge( chunkWS, **extra_kwargs):
-    '''
-    Calculates the PROTONCHARGE process variable.
-    '''
-    
-    # The try...except paragraph initializes a couple of attributes on
-    # the function.  This is the python equivalent of static variables
-    try:
-        calc_protoncharge.run_num
-        calc_protoncharge.accum_charge
-    except AttributeError:
-        calc_protoncharge.run_num = chunkWS.getRunNumber()
-        calc_protoncharge.accum_charge = 0
-        
-    if calc_protoncharge.run_num != chunkWS.getRunNumber():
-        # new run - reset the accumulated charge
-        calc_protoncharge.accum_charge = 0
-        calc_protoncharge.run_num = chunkWS.getRunNumber()
-    
-    run = chunkWS.run()
-    # For reasons that are unclear, calling run.getProtonCharge() causes the program to
-    # crash with an error about unknown property "gd_prtn_chrg" 
-    if run.hasProperty( 'proton_charge'):
-        # the proton_charge property is the charge for each pulse.  We need to
-        # sum all of those charge values
-        p_charge = run.getProperty('proton_charge')
-        for n in range( p_charge.size()):
-            calc_protoncharge.accum_charge += p_charge.nthValue(n)
-    
-    return calc_protoncharge.accum_charge
-        
-    
-# Register our PV function
-PV_Functions_Chunk['PROTONCHARGE'] = calc_protoncharge
-      
-# -----------------------------------------------------------------------------
-
-
-
-# -----------------------------------------------------------
-# HACK!!!
-# I want to try get the event counts from the post-processing step
-# This value should be the same as what's produced from the chunk
-# processing, but without the necessity of doing the accumulation myself
-def calc_evtcnt_post( accumWS, **extra_kwargs):
-    '''
-    Calculates the EVTCNT_POST process variable.
-    '''
-        
-    return accumWS.getNumberEvents()
-
-PV_Functions_Post['EVTCNT_POST'] = calc_evtcnt_post
-# ------------------------------------------------
 
 
 def build_pvdb():
@@ -319,6 +223,10 @@ class PostProcessing(PythonAlgorithm):
         if not isinstance(inputWS, IEventWorkspace):
             logger.error( "InputWorkspace was a type '%s' instead of an IEventWorkspace"%type(inputWS).__name__)
             logger.error( "Attempting to continue, but this is likely to cause Mantid to crash eventually.")
+            # Note:  The workspace *WON'T* be an IEventWorkspace unless the 'PreserveEvents' option
+            # is used when calling StartLiveData.  For now, it's hard-coded to True, but we might
+            # want to make that optional if we start running out of memory because the workspaces
+            # are getting too big.
                         
         for PV in PROCESS_VARIABLES:
             if PV in PV_Functions_Post:
@@ -349,6 +257,34 @@ AlgorithmFactory.subscribe( PostProcessing())
 
 
 
+def import_plugins( plugin_dirs):
+    '''
+    Import plugins for calculating PV's
+    
+    Iterates through the list of directories where plugins might be found (the
+    plugin_dirs parameter).  For each dir, it iterates through the list of
+    files.  For each .py file, it reads the file and tries to call the
+    function 'register_pvs'.
+    '''
+    
+    for d in plugin_dirs:
+        sys.path.append(d)
+        try:
+            for f in os.listdir(d):
+                if os.path.isfile(os.path.join(d,f)):
+                    if f[-3:] == '.py':
+                        # OK, found a python file.  Import register_pvs
+                        m = __import__(f[:-3])
+                        try:
+                            m.register_pvs(PV_Functions_Chunk, PV_Functions_Post)
+                        except AttributeError:
+                            logger.warning( "Module '%s' in directory '%s' has no 'register_pvs' function.  Ignoring this module" %(f, d))
+        except OSError:
+            logger.warning( "Plugin directory '%s' does not exist.  Continuing plugin processing." % d)
+        
+        # Done loading plugins from the directory, so remove it from sys.path
+        sys.path = sys.path[:-1]
+        
 
 def main():
     '''
@@ -361,6 +297,10 @@ def main():
     parser.add_option("-f", "--config_file", dest="config",
                       help="the name of the configuration file",
                       default="")
+    parser.add_option("-d", "--plugin_dir", dest="plugin_dirs", 
+                      action="append", type="string",
+                      help="a directory where plugin files are located",
+                      default="")
     
     parser.set_defaults(config="mantidstats.conf")  
     (options, args) = parser.parse_args()
@@ -368,6 +308,9 @@ def main():
     # There shouldn't be any extra args
     if len(args):
         logger.warning( "Extraneous command line arguments: %s" % str(args))
+    
+    plugin_dirs = []
+    plugin_dirs.extend(options.plugin_dirs)
     
     # Read the config file
     # TODO: Trap exceptions!
@@ -385,6 +328,24 @@ def main():
     # Done with the config file
 
 
+    # Import our plugins
+    
+    # The default plugin dir is a directory named 'plugins' in the same dir
+    # as our main .py file.
+    exec_paths = sys.argv[0].split(os.sep)
+    if (len(exec_paths)==1):
+        # no actual path in argv[0].  Use './plugins'
+        plugin_dirs.append("./plugins")
+    else:
+        exec_paths[-1] = 'plugins'
+        plugin_dirs.append( os.sep.join( exec_paths))
+        
+    logger.notice( "Plugin directories: %s" % str( plugin_dirs))
+    import_plugins( plugin_dirs)
+    
+    
+    
+    
 
     # TODO: Validate the PROCESS_VARIABLES list (ie: make sure we know how
     # to calculate every requested PV)
