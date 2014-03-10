@@ -19,7 +19,6 @@ TODO List:
 - Figure out how to daemonize python programs.  I think there's a package for that...
 - There a lot more to the pcaspy library to figure out.  In particular, running camonitor (from another terminal)
   doesn't show the values updating, though repeatedly running caget does.  Need to figure out why. 
-- Create a git repo and check this code in  (probably github.com/neutrons)
 - Figure out a way to specify the mantid library location in the config file (the sys.path.append() and import
   statements are normally executed well before the config file is parsed...)
 
