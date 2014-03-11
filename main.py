@@ -32,19 +32,19 @@ Config related tasks:
 '''
 
 '''
-A possible plugin architecture for the PV calc functions:
-1) Have a designated 'plugin' directory. (Possibly more than one: a system
-   plugins dir and and user plugins dir??  Also have a command line option
-   to specify dir(s).)
-2) At program start, plugin dir(s) are scanned for files.
-3) Any .py file is loaded (how, exactly?  need to look this up) and a
-   'register_pvs' function is called.  (It's a requirement that this function
-   exists.  Program will throw and exception - or at least log a warning - if
-   it doesn't)
-4) register_pvs function returns a tuple of of 2 dictionaries.  Each dict
+Plugin architecture description:
+1) Plugins are stored in designated plugins directories.  By default, the
+   program searches for a directory called 'plugins' under the directory that
+   contains the main .py file.  Plugin directories can also be specified on
+   the command line or in the configuration file. 
+2) At program start, all plugin dirs are scanned for .py files.
+3) Any .py file treated as a module and imported.  The module's 'register_pvs'
+   function is called.  (It's a requirement that this function exists.  The
+   program will log a warning if it doesn't.)
+4) The register_pvs function returns a tuple of of 2 dictionaries.  Each dict
    maps a PV name to a callable that will calculate the value for that PV.
    The first dict in the tuple is for values that are calculated during the
-   chunk processing.  The second dict is for values that calculated during
+   chunk processing.  The second dict is for values that are calculated during
    the post processing.  The contents of the 2 dicts will be added to the
    top-level PV_Functions_* dicts.
 5) It's up to the register function to do any initialization prior to 
@@ -56,8 +56,6 @@ A possible plugin architecture for the PV calc functions:
    callables.   
    
 Notes:
-- Will the callables returned by the register_pvs functions be accessible
-  at the top level?
 - Most of these 'plugins' will actually be included on all systems.  How
   do we actually package all these files up?  Python eggs?
 - Can we make this dynamic at a later date (ie: constantly scan the
@@ -276,7 +274,9 @@ def import_plugins( plugin_dirs):
                         # OK, found a python file.  Import register_pvs
                         m = __import__(f[:-3])
                         try:
-                            m.register_pvs(PV_Functions_Chunk, PV_Functions_Post)
+                            (chunk, post) = m.register_pvs()                        
+                            PV_Functions_Chunk.update( chunk)
+                            PV_Functions_Post.update( post)
                         except AttributeError:
                             logger.warning( "Module '%s' in directory '%s' has no 'register_pvs' function.  Ignoring this module" %(f, d))
         except OSError:
@@ -296,11 +296,10 @@ def main():
     parser = OptionParser()
     parser.add_option("-f", "--config_file", dest="config",
                       help="the name of the configuration file",
-                      default="")
+                      default='mantidstats.conf')
     parser.add_option("-d", "--plugin_dir", dest="plugin_dirs", 
                       action="append", type="string",
-                      help="a directory where plugin files are located",
-                      default="")
+                      help="a directory where plugin files are located")
     
     parser.set_defaults(config="mantidstats.conf")  
     (options, args) = parser.parse_args()
@@ -309,13 +308,24 @@ def main():
     if len(args):
         logger.warning( "Extraneous command line arguments: %s" % str(args))
     
-    plugin_dirs = []
-    plugin_dirs.extend(options.plugin_dirs)
+    plugin_dirs = []  # List that holds the directories we'll search for plugins
+    if options.plugin_dirs != None:
+        # Add any plugin dirs that were specified on the command line
+        plugin_dirs.extend(options.plugin_dirs)
     
     # Read the config file
-    # TODO: Trap exceptions!
-    config = ConfigParser.ConfigParser()
-    config.read( options.config)
+    config = ConfigParser.ConfigParser()  
+    try:
+        config_file = open( options.config)
+    except IOError, e:
+        print "Failed to open config file '%s'"%options.config
+        print e
+        print "Aborting"
+        sys.exit(1)
+        
+    config.readfp(config_file)
+
+    # TODO: Trap exceptions for missing config options
     INSTRUMENT = config.get("Beamline Config", "INSTRUMENT")
     BEAMLINE_PREFIX = config.get("Beamline Config", "BEAMLINE_PREFIX")
     PV_PREFIX = 'SNS:' + BEAMLINE_PREFIX + ":MSS:"
@@ -325,6 +335,11 @@ def main():
     pv_list_str = config.get("Beamline Config", "PROCESS_VARIABLES")
     PROCESS_VARIABLES.extend( [i.strip() for i in pv_list_str.split(',')])
     
+    
+    if config.has_option("System Config", "PLUGINS_DIRS"):
+        plugdir_list_str = config.get("System Config", "PLUGINS_DIRS")
+        plugin_dirs.extend( [i.strip() for i in plugdir_list_str.split(',')])
+        
     # Done with the config file
 
 

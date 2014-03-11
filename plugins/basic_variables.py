@@ -97,16 +97,21 @@ def calc_evtcnt_post( accumWS, **extra_kwargs):
 # ------------------------------------------------
 
 
-def register_pvs( pv_functions_chunk, pv_functions_post):
+def register_pvs():
     '''
     Called by the main plugin loader.  This function sets up the mappings
     between process variable names and the callables that calculate their
     values.
     '''
         
+    pv_functions_chunk = {}
+    pv_functions_post = {}
+    
     pv_functions_chunk['PROTONCHARGE'] = calc_protoncharge    
     pv_functions_chunk['RUNNUM'] = calc_runnum
     pv_functions_chunk['EVTCNT'] = calc_evtcnt
     pv_functions_post['EVTCNT_POST'] = calc_evtcnt_post
+    
+    return (pv_functions_chunk, pv_functions_post)
     
     
