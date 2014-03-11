@@ -26,7 +26,6 @@ TODO List:
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
 - Figure out beamline config options (beamline name, beamline prefix, which PV's to calculate)
-- Should the two sets of config options be in a single config file? Probably...
 - Make the code robust enough to handle improperly written config files (at least fail gracefully)
 
 '''
@@ -70,6 +69,8 @@ chunkWS - IEventWorkspace - an event workspace containing the data that's
           arrived since the last call
 accumWS - IEventWorkspace - an event workspace containing all the data for
           the current run
+pv_name - The name of the process variable to be calculated. (Needed for cases
+          where the same function may calculate more than 1 process variable.)
 run_num - int - the current run number.  May be 0 if we're between runs.
 
 Note: chunkWS and accumWS are mutually exclusive.  One is guaranteed to be
@@ -195,6 +196,7 @@ class ChunkProcessing(PythonAlgorithm):
                 # keywords are important to their particular function.
                 PV_Values[PV] = PV_Functions_Chunk[PV]( chunkWS = inputWS,
                                                         accumWS = None,
+                                                        pv_name = PV,
                                                         run_num = inputWS.getRunNumber()
                                                       )
             #else:
@@ -236,6 +238,7 @@ class PostProcessing(PythonAlgorithm):
                 # keywords are important to their particular function.
                 PV_Values[PV] = PV_Functions_Post[PV]( chunkWS = None,
                                                        accumWS = inputWS,
+                                                       pv_name = PV,
                                                        run_num = inputWS.getRunNumber()
                                                      )
             #else:
