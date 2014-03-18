@@ -8,10 +8,6 @@ Created on Jan 30, 2014
 '''
 TODO List:
 - Figure out how best to store individual PV calc callables (or classes) - probably separate .py files in a package?
-- Figure out how to allow wildcards in the mapping from PV name to callable.  (So, for example, a single callable 
-  handle multiple beam monitor PV's) - Use RegEx's - Python has good support for them
-- Figure out how to automatically import all PV calc functions (will from xxxx import * work?)
-- Figure out how to automatically register the functions when they're imported
 - Document the keyword params that will be passed to the callables
 - There is a perceptible amount of time between the ChunkProcessing and PostProcessing algorithms.  Specifically, it
   was not uncommon for the EVTCNT and EVTCNT_POST to differ when polled with caget.  Need to discuss this with some
@@ -21,7 +17,9 @@ TODO List:
   doesn't show the values updating, though repeatedly running caget does.  Need to figure out why. 
 - Figure out a way to specify the mantid library location in the config file (the sys.path.append() and import
   statements are normally executed well before the config file is parsed...)
-
+- If we don't have any PV's that require the post-processing step, then don't set the 'PreserveEvents' and
+  'PostProcessingAlgorithm' parameters in StartLiveListener()  (saves memory and CPU cycles down in Mantid)
+- Add code to handle improper regex strings in plugin definitions
 
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
@@ -37,20 +35,20 @@ Plugin architecture description:
    contains the main .py file.  Plugin directories can also be specified on
    the command line or in the configuration file. 
 2) At program start, all plugin dirs are scanned for .py files.
-3) Any .py file treated as a module and imported.  The module's 'register_pvs'
-   function is called.  (It's a requirement that this function exists.  The
-   program will log a warning if it doesn't.)
+3) Any .py file that is found is treated as a module and imported.  The
+   module's 'register_pvs' function is called.  (It's a requirement that this
+   function exists.  The program will log a warning if it doesn't.)
 4) The register_pvs function returns a tuple of of 2 dictionaries.  Each dict
-   maps a PV name to a callable that will calculate the value for that PV.
+   maps a regular expression to a callable that will calculate the value for
+   any PV who's name matches that regular expression.
    The first dict in the tuple is for values that are calculated during the
    chunk processing.  The second dict is for values that are calculated during
-   the post processing.  The contents of the 2 dicts will be added to the
-   top-level PV_Functions_* dicts.
+   the post processing.
 5) It's up to the register function to do any initialization prior to 
    returning.  (ie: set some global values, instantiate a callable object,
    etc..)
 6) The callables returned in the dictionaries should all use the **kwargs
-   calling idom so that they can safely ignore any keyword params that they
+   calling idiom so that they can safely ignore any keyword params that they
    don't need.  See below for the list of keywords that will be passed to all
    callables.   
    
@@ -81,6 +79,7 @@ a calc function to do this, but it's at least possible.
 
 import sys
 import os
+import re  # regex processing for the PV calculation callables
 
 from optparse import OptionParser
 import ConfigParser
@@ -258,7 +257,7 @@ AlgorithmFactory.subscribe( PostProcessing())
 
 
 
-def import_plugins( plugin_dirs):
+def import_plugins( plugin_dirs, chunk_regex, post_regex):
     '''
     Import plugins for calculating PV's
     
@@ -277,9 +276,17 @@ def import_plugins( plugin_dirs):
                         # OK, found a python file.  Import register_pvs
                         m = __import__(f[:-3])
                         try:
-                            (chunk, post) = m.register_pvs()                        
-                            PV_Functions_Chunk.update( chunk)
-                            PV_Functions_Post.update( post)
+                            (chunk, post) = m.register_pvs()
+                            
+                            # compile the regex strings returned by
+                            # register_pvs() into compiled re objects
+                            # TODO: Properly handle poorly defined regex strings!
+                            for k in chunk:
+                                chunk_regex[re.compile(k)] = chunk[k]
+                            
+                            for k in post:
+                                post_regex[re.compile(k)] = post[k]
+
                         except AttributeError:
                             logger.warning( "Module '%s' in directory '%s' has no 'register_pvs' function.  Ignoring this module" %(f, d))
         except OSError:
@@ -359,16 +366,40 @@ def main():
         plugin_dirs.append( os.sep.join( exec_paths))
         
     logger.notice( "Plugin directories: %s" % str( plugin_dirs))
-    import_plugins( plugin_dirs)
+    
+    chunk_regex = {}
+    post_regex = {}
+    import_plugins( plugin_dirs, chunk_regex, post_regex)
     
     
     
+    # Now match all the requested PV names to a pattern in chunk_regex or
+    # post_regex and build up the PV_Functions_Chunk and PV_Functions_Post
+    # dictionaries.
+    for pv_name in PROCESS_VARIABLES:
+        function_found = False
+        for r in chunk_regex:
+            if r.match(pv_name):
+                function_found = True
+                PV_Functions_Chunk[pv_name] = chunk_regex[r]
+                break
+        
+        if function_found:
+            continue;  # don't bother searching the post_regex dict
+            
+        for r in post_regex:
+            if r.match(pv_name):
+                function_found = True
+                PV_Functions_Post[pv_name] = post_regex[r]
+                break
+        
+        if not function_found:
+            logger.error( "Could not match PV '%s' to any calculation function"%pv_name)
+            
     
-
-    # TODO: Validate the PROCESS_VARIABLES list (ie: make sure we know how
-    # to calculate every requested PV)
-
-
+    # TODO: Verify that a requested PV only matches a single callable 
+    
+    
 
     # Note: if processing or post-processing algorithms require an
     # accumulation workspace, then the returned tuple will look like:

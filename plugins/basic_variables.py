@@ -41,13 +41,13 @@ def calc_evtcnt( chunkWS, **extra_kwargs):
 
 # -----------------------------------------------------------------------------
 
-def calc_runnum( chunkWS, **extra_kwargs):
+def calc_runnum( run_num, **extra_kwargs):
     '''
     Calculates the RUNNUM process variable.
     '''
     
-    # This one is about as simple as it gets    
-    return chunkWS.getRunNumber()   
+    # This one is just stupid simple...    
+    return run_num   
 # -----------------------------------------------------------------------------
 
 def calc_protoncharge( chunkWS, **extra_kwargs):
@@ -107,10 +107,10 @@ def register_pvs():
     pv_functions_chunk = {}
     pv_functions_post = {}
     
-    pv_functions_chunk['PROTONCHARGE'] = calc_protoncharge    
-    pv_functions_chunk['RUNNUM'] = calc_runnum
-    pv_functions_chunk['EVTCNT'] = calc_evtcnt
-    pv_functions_post['EVTCNT_POST'] = calc_evtcnt_post
+    pv_functions_chunk[r'^PROTONCHARGE$'] = calc_protoncharge    
+    pv_functions_chunk[r'^RUNNUM$'] = calc_runnum
+    pv_functions_chunk[r'^EVTCNT$'] = calc_evtcnt
+    pv_functions_post[r'^EVTCNT_POST$'] = calc_evtcnt_post
     
     return (pv_functions_chunk, pv_functions_post)
     
