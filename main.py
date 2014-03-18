@@ -338,7 +338,7 @@ def main():
     # TODO: Trap exceptions for missing config options
     INSTRUMENT = config.get("Beamline Config", "INSTRUMENT")
     BEAMLINE_PREFIX = config.get("Beamline Config", "BEAMLINE_PREFIX")
-    PV_PREFIX = 'SNS:' + BEAMLINE_PREFIX + ":MSS:"
+    PV_PREFIX = BEAMLINE_PREFIX + ":CS:"
     
     # ConfigParser doesn't recognize lists of items, so what we get back is a
     # single string that we split into a list ourselves
