@@ -96,6 +96,33 @@ def calc_evtcnt_post( accumWS, **extra_kwargs):
     return accumWS.getNumberEvents()
 # ------------------------------------------------
 
+# -----------------------------------------------------------
+def calc_beam_mon_cnt_post( accumWS, pv_name, **kwargs):
+    '''
+    Calculate values for beam monitor event count process variables
+    '''
+    
+    # Sanity check pv_name
+    # Note: expects the name to be something like M1CNT, M2CNT, M99CNT, etc...
+    if pv_name[0] != 'M' or pv_name[-3:] != 'CNT':
+        # HACK!! What should we do here? Throw an exception?
+        return -1
+    
+    try:
+        int( pv_name[1:-3])
+    except ValueError:  # couldn't figure out the monitor number...
+        # HACK!! Again, should proably throw some other exception
+        return -1
+    
+    prop_name = "monitor" + pv_name[1:-3] + "_counts"
+    if accumWS.run().hasProperty( prop_name):
+        prop = accumWS.run().getProperty( prop_name)
+        return prop.value
+    else:
+        # HACK: should we throw an exception in this case?
+        return -1
+# -----------------------------------------------------------    
+
 
 def register_pvs():
     '''
@@ -111,6 +138,9 @@ def register_pvs():
     pv_functions_chunk[r'^RUNNUM$'] = calc_runnum
     pv_functions_chunk[r'^EVTCNT$'] = calc_evtcnt
     pv_functions_post[r'^EVTCNT_POST$'] = calc_evtcnt_post
+    
+    # should match M1CNT, M2CNT...M99CNT...M1001CNT, etc..
+    pv_functions_post[r'^M[0-9]+CNT$'] = calc_beam_mon_cnt_post
     
     return (pv_functions_chunk, pv_functions_post)
     

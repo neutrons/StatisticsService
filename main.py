@@ -20,6 +20,10 @@ TODO List:
 - If we don't have any PV's that require the post-processing step, then don't set the 'PreserveEvents' and
   'PostProcessingAlgorithm' parameters in StartLiveListener()  (saves memory and CPU cycles down in Mantid)
 - Add code to handle improper regex strings in plugin definitions
+- Define one or more exceptions for the calculation functions to throw when
+  they encounter errors.  Have the ChunkProcessing and PostProcessing
+  algorithms trap the exceptions and set the appropriate EPICS error flags for
+  the PV 
 
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
