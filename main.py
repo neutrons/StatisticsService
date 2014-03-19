@@ -29,6 +29,7 @@ Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
 - Figure out beamline config options (beamline name, beamline prefix, which PV's to calculate)
 - Make the code robust enough to handle improperly written config files (at least fail gracefully)
+- Allow users to specify the update rate (ie: the value of the 'scan' field in pvdb) for each PV
 
 '''
 
@@ -143,10 +144,14 @@ def build_pvdb():
     pvdb = { }
     
     for name in PROCESS_VARIABLES:
-        pvdb[name] = { 'prec' : 5}
+        pvdb[name] = { 'prec' : 5, 'scan' : 1}
         # for now, all variables will have a precision of 5
-        # There's a lot of other fields we could add, so we
-        # might want to make this more customizable.
+        # There's a lot of other fields we could add, so we might want to make
+        # this more customizable.
+        #
+        # The scan field should probably match the UpdateEvery parameter to
+        # StartLiveData.  (There's no point having the PV update any faster
+        # than the live listener runs.) 
     
     return pvdb
 
