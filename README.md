@@ -25,6 +25,7 @@ The following keywords are passed to every PV calculation function when it is ca
 * accumWS: `IEventWorkspace` - an event workspace containing all the data for the current run
 * pv_name: `string` - The name of the process variable to be calculated. (Needed for cases where the same function may calculate more than 1 process variable.)
 * run_num: `int` - the current run number.  May be 0 if we're between runs.
+* logger_name: `string` - the name of the logger to use (if you want log messages to appear in the same location as the main program)
 
 Note: chunkWS and accumWS are mutually exclusive.  One is guaranteed to be None.  They're both passed so that the same calc function could be used for both chunk processing and post processing. Not sure if there's any reason for a calc function to do this, but it's at least possible.
 

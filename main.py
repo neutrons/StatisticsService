@@ -42,6 +42,8 @@ import re  # regex processing for the PV calculation callables
 from optparse import OptionParser
 import ConfigParser
 
+import logging
+import logging.handlers
 
 # Try to figure out where Mantid is installed and set sys.path accordingly
 if os.environ.has_key('MANTIDPATH'):
@@ -56,7 +58,7 @@ try:
     from mantid.api import IEventWorkspace
 #    from mantid.api import Run
     from mantid.api import PythonAlgorithm, AlgorithmFactory, WorkspaceProperty
-    from mantid.kernel import Direction, logger
+    from mantid.kernel import Direction
 except ImportError, e:
     print """
 Failed to import the Mantid framework libraries.
@@ -95,7 +97,12 @@ PV_Functions_Post = {}
 PV_Values = {}
 PROCESS_VARIABLES = []
 
-
+# Another global: The name of the logger object.  Using a global so that all
+# the different functions can log to the same location. (And also the two
+# Algorithm objects can also use it.)
+# The 'pythonic' way is to use the name of the module, but in this case 
+# 'main' is a lousy name for a logger.
+LOGGER_NAME="MantidStats"
 
 
 def build_pvdb():
@@ -145,7 +152,8 @@ class ChunkProcessing(PythonAlgorithm):
         
     def PyExec(self):
         # Run the algorithm
-        logger.information( "Running the ChunkProcessing algorithm")
+        logger = logging.getLogger(LOGGER_NAME)
+        logger.debug( "Running the ChunkProcessing algorithm")
     
         # TODO: What other parameters might PV functions want to know?
     
@@ -166,7 +174,8 @@ class ChunkProcessing(PythonAlgorithm):
                 PV_Values[PV] = PV_Functions_Chunk[PV]( chunkWS = inputWS,
                                                         accumWS = None,
                                                         pv_name = PV,
-                                                        run_num = inputWS.getRunNumber()
+                                                        run_num = inputWS.getRunNumber(),
+                                                        logger_name = LOGGER_NAME
                                                       )
                 # Note: If you change the list of keyword parameters, be sure
                 # to update README.md!!!
@@ -187,7 +196,8 @@ class PostProcessing(PythonAlgorithm):
         
     def PyExec(self):
         # Run the algorithm
-        logger.information( "Running the PostProcessing algorithm")
+        logger = logging.getLogger(LOGGER_NAME)
+        logger.debug( "Running the PostProcessing algorithm")
         
         # Call each PV's calculation function
         inputWS = self.getProperty("InputWorkspace").value
@@ -210,7 +220,8 @@ class PostProcessing(PythonAlgorithm):
                 PV_Values[PV] = PV_Functions_Post[PV]( chunkWS = None,
                                                        accumWS = inputWS,
                                                        pv_name = PV,
-                                                       run_num = inputWS.getRunNumber()
+                                                       run_num = inputWS.getRunNumber(),
+                                                       logger_name = LOGGER_NAME
                                                      )
                 # Note: If you change the list of keyword parameters, be sure
                 # to update README.md!!!
@@ -240,6 +251,8 @@ def import_plugins( plugin_dirs, chunk_regex, post_regex):
     files.  For each .py file, it reads the file and tries to call the
     function 'register_pvs'.
     '''
+    
+    logger = logging.getLogger(LOGGER_NAME)
     
     for d in plugin_dirs:
         sys.path.append(d)
@@ -280,11 +293,19 @@ def main():
     parser = OptionParser()
     parser.add_option("-f", "--config_file", dest="config",
                       help="the name of the configuration file",
+                      metavar="CONFIG_FILE",
                       default='mantidstats.conf')
     parser.add_option("-d", "--plugin_dir", dest="plugin_dirs", 
                       action="append", type="string",
-                      help="a directory where plugin files are located")
-    
+                      metavar="PLUGIN_DIR",
+                      help="a directory where plugin files are located  (option may be specified multiple times)")
+    parser.add_option("", "--console_log",
+                      help="Log to std err.  (Default is to use syslog)",
+                      action="store_true")
+    parser.add_option("", "--debug",
+                      help="Include debugging messages in the log",
+                      action="store_true")
+
     parser.set_defaults(config="mantidstats.conf")  
     (options, args) = parser.parse_args()
     
@@ -292,19 +313,46 @@ def main():
     if len(args):
         logger.warning( "Extraneous command line arguments: %s" % str(args))
     
-    plugin_dirs = []  # List that holds the directories we'll search for plugins
-    if options.plugin_dirs != None:
-        # Add any plugin dirs that were specified on the command line
-        plugin_dirs.extend(options.plugin_dirs)
+            
+    # Set up logging
+    root_logger = logging.getLogger()
+    if options.console_log:
+        console_handler = logging.StreamHandler()
+        # Add a timestamp to logs sent to std err (syslog automatically adds
+        # its own timestamp, so we don't need to include ours in that case)
+        formatter = logging.Formatter('%(asctime)s - %(name)s: - %(levelname)s - %(message)s')
+        console_handler.setFormatter( formatter)
+        root_logger.addHandler( console_handler)
+    else:
+        syslog_handler = logging.handlers.SysLogHandler('/dev/log')
+        
+        # Re-map the syslog handler's priority for the DEBUG level because
+        # 'debug' level messages are probably filtered out by the syslog
+        # daemon itself.
+        syslog_handler.priority_map['DEBUG'] = 'info'
+
+        formatter = logging.Formatter('%(name)s: - %(levelname)s - %(message)s')
+        syslog_handler.setFormatter( formatter)
+        root_logger.addHandler( syslog_handler)
+        
+    if options.debug:
+        root_logger.setLevel( logging.DEBUG)
+    else:
+        root_logger.setLevel( logging.INFO)
+
+    logger = logging.getLogger( LOGGER_NAME)
+    logger.info( "Starting Mantid Statistics Service...")
+    logger.debug( "Debug log level is set.")
     
+        
     # Read the config file
     config = ConfigParser.ConfigParser()  
     try:
         config_file = open( options.config)
     except IOError, e:
-        print "Failed to open config file '%s'"%options.config
-        print e
-        print "Aborting"
+        logger.critical( "Failed to open config file '%s'"%options.config)
+        logger.critical( e)
+        logger.critical( "Aborting")
         sys.exit(1)
         
     config.readfp(config_file)
@@ -320,6 +368,7 @@ def main():
     PROCESS_VARIABLES.extend( [i.strip() for i in pv_list_str.split(',')])
     
     
+    plugin_dirs = []  # List that holds the directories we'll search for plugins
     if config.has_option("System Config", "PLUGINS_DIRS"):
         plugdir_list_str = config.get("System Config", "PLUGINS_DIRS")
         plugin_dirs.extend( [i.strip() for i in plugdir_list_str.split(',')])
@@ -338,8 +387,12 @@ def main():
     else:
         exec_paths[-1] = 'plugins'
         plugin_dirs.append( os.sep.join( exec_paths))
-        
-    logger.notice( "Plugin directories: %s" % str( plugin_dirs))
+
+    # Add any plugin dirs that were specified on the command line        
+    if options.plugin_dirs != None:
+        plugin_dirs.extend(options.plugin_dirs)
+    
+    logger.info( "Plugin directories: %s" % str( plugin_dirs))
     
     chunk_regex = {}
     post_regex = {}
