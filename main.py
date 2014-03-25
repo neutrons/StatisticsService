@@ -75,13 +75,12 @@ Mantid has been installed.
 sys.path.append('/opt/pcaspy/lib64/python2.7/site-packages/pcaspy-0.4.1-py2.7-linux-x86_64.egg')
 from pcaspy import SimpleServer, Driver
 
-# Not quite ready for the daemon stuff yet...
-## Try to use the daemon package.  But continue anyway if it's not available
-#NO_DAEMON_PKG=False
-#try:
-#    import daemon
-#except ImportError:
-#    NO_DAEMON_PKG=True
+# Try to use the daemon package.  But continue anyway if it's not available
+NO_DAEMON_PKG=False
+try:
+    import daemon
+except ImportError:
+    NO_DAEMON_PKG=True
 
 # Need a few dictionaries here:  two to map PV names to the functions
 # that calculate their values and another to map PV names to their current
@@ -235,7 +234,7 @@ class PostProcessing(PythonAlgorithm):
         # don't modify the data, but for some reason, we do.  Also, the
         # outputWS = inputWS line should suffice, but again for some reason
         # it doesn't.  Russell is looking in to both these problems.  In the
-        # meantime, clone() works find.
+        # meantime, clone() works fine.
         inputWS.clone(OutputWorkspace = self.getPropertyValue("OutputWorkspace"))
         
 AlgorithmFactory.subscribe( PostProcessing())  
@@ -285,8 +284,8 @@ def import_plugins( plugin_dirs, chunk_regex, post_regex):
 
 def main():
     '''
-    Parse the command line options and config file, then start up the mantid
-    live listener and begin exporting the requested process variables.
+    Parse the command line options and set up the logging system.  Then 
+    decide whether to become a daemon process or remain in the foreground.
     '''
     
     # First, parse the command line options
@@ -294,7 +293,7 @@ def main():
     parser.add_option("-f", "--config_file", dest="config",
                       help="the name of the configuration file",
                       metavar="CONFIG_FILE",
-                      default='mantidstats.conf')
+                      default='/etc/mantidstats.conf')
     parser.add_option("-d", "--plugin_dir", dest="plugin_dirs", 
                       action="append", type="string",
                       metavar="PLUGIN_DIR",
@@ -305,8 +304,10 @@ def main():
     parser.add_option("", "--debug",
                       help="Include debugging messages in the log",
                       action="store_true")
-
-    parser.set_defaults(config="mantidstats.conf")  
+    parser.add_option("", "--no_daemon", dest="no_daemon",
+                      help="Don't start up as a daemon process - remain in the foreground",
+                      action="store_true")
+  
     (options, args) = parser.parse_args()
     
             
@@ -346,16 +347,43 @@ def main():
     if len(args):
         logger.warning( "Extraneous command line arguments: %s" % str(args))
     
+    # Should we fork and become a daemon?
+    if not options.no_daemon:
+        if NO_DAEMON_PKG == False:
+            logger.debug( "About to fork to background")
+            daemon_context = daemon.DaemonContext()
+            daemon_context.open()
+            logger.debug( "Running as a daemon")  # for reasons that are unclear, this debug statement never shows up!
+        else:
+            logger.warning( "Python daemon library not found.  Cannot daemonize.  Continuing in the foreground.")
+            
+    logger.debug( "Calling main_continued()")
+    main_continued( options)
+    
+    
+    
+def main_continued( options):    
+    '''
+    Parse the config file, then start up the mantid live listener and begin
+    exporting the requested process variables.
+    '''
+    
+    logger = logging.getLogger( LOGGER_NAME)
         
     # Read the config file
     config = ConfigParser.ConfigParser()  
     try:
         config_file = open( options.config)
     except IOError, e:
-        logger.critical( "Failed to open config file '%s'"%options.config)
-        logger.critical( e)
-        logger.critical( "Aborting")
-        sys.exit(1)
+        logger.error( "Failed to open config file '%s'"%options.config)
+        logger.error( e)
+        logger.error( "Trying ./mantidstats.conf as a last resort")
+        try:
+            config_file = open( "./mantidstats.conf")
+        except IOError:
+            logger.critical( "Failed to open any config file.")
+            logger.critical( "Aborting")
+            sys.exit(1)
         
     config.readfp(config_file)
 
