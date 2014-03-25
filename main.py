@@ -309,10 +309,6 @@ def main():
     parser.set_defaults(config="mantidstats.conf")  
     (options, args) = parser.parse_args()
     
-    # There shouldn't be any extra args
-    if len(args):
-        logger.warning( "Extraneous command line arguments: %s" % str(args))
-    
             
     # Set up logging
     root_logger = logging.getLogger()
@@ -343,6 +339,12 @@ def main():
     logger = logging.getLogger( LOGGER_NAME)
     logger.info( "Starting Mantid Statistics Service...")
     logger.debug( "Debug log level is set.")
+    
+    # I'd prefer to have this up by the call to parse_args(), but we
+    # haven't set up a logger at that point...
+    # Log a warning if there are any extra command line arguments
+    if len(args):
+        logger.warning( "Extraneous command line arguments: %s" % str(args))
     
         
     # Read the config file
