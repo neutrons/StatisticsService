@@ -13,8 +13,8 @@ TODO List:
   was not uncommon for the EVTCNT and EVTCNT_POST to differ when polled with caget.  Need to discuss this with some
   of the instrument scientists and determine if that could cause problems.
 - Figure out how to daemonize python programs.  I think there's a package for that...
-- There a lot more to the pcaspy library to figure out.  In particular, running camonitor (from another terminal)
-  doesn't show the values updating, though repeatedly running caget does.  Need to figure out why. 
+- There a lot more to the pcaspy library to figure out. I think I'm using it properly, but I have no idea about
+  any other useful features that might exist. 
 - Figure out a way to specify the mantid library location in the config file (the sys.path.append() and import
   statements are normally executed well before the config file is parsed...)
 - If we don't have any PV's that require the post-processing step, then don't set the 'PreserveEvents' and
@@ -24,6 +24,8 @@ TODO List:
   they encounter errors.  Have the ChunkProcessing and PostProcessing
   algorithms trap the exceptions and set the appropriate EPICS error flags for
   the PV 
+- Need a setup.py script so I can build RPM's (include an init.d script)
+- Need to remove the hard-coded path extension for importing pcaspy
 
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
@@ -31,55 +33,6 @@ Config related tasks:
 - Make the code robust enough to handle improperly written config files (at least fail gracefully)
 - Allow users to specify the update rate (ie: the value of the 'scan' field in pvdb) for each PV
 
-'''
-
-'''
-Plugin architecture description:
-1) Plugins are stored in designated plugins directories.  By default, the
-   program searches for a directory called 'plugins' under the directory that
-   contains the main .py file.  Plugin directories can also be specified on
-   the command line or in the configuration file. 
-2) At program start, all plugin dirs are scanned for .py files.
-3) Any .py file that is found is treated as a module and imported.  The
-   module's 'register_pvs' function is called.  (It's a requirement that this
-   function exists.  The program will log a warning if it doesn't.)
-4) The register_pvs function returns a tuple of of 2 dictionaries.  Each dict
-   maps a regular expression to a callable that will calculate the value for
-   any PV who's name matches that regular expression.
-   The first dict in the tuple is for values that are calculated during the
-   chunk processing.  The second dict is for values that are calculated during
-   the post processing.
-5) It's up to the register function to do any initialization prior to 
-   returning.  (ie: set some global values, instantiate a callable object,
-   etc..)
-6) The callables returned in the dictionaries should all use the **kwargs
-   calling idiom so that they can safely ignore any keyword params that they
-   don't need.  See below for the list of keywords that will be passed to all
-   callables.   
-   
-Notes:
-- Most of these 'plugins' will actually be included on all systems.  How
-  do we actually package all these files up?  Python eggs?
-- Can we make this dynamic at a later date (ie: constantly scan the
-  plugin dirs for new files and load them when they're discovered?)
-'''
-
-
-'''
-Keywords passed to the pv calc functions:
-
-chunkWS - IEventWorkspace - an event workspace containing the data that's
-          arrived since the last call
-accumWS - IEventWorkspace - an event workspace containing all the data for
-          the current run
-pv_name - The name of the process variable to be calculated. (Needed for cases
-          where the same function may calculate more than 1 process variable.)
-run_num - int - the current run number.  May be 0 if we're between runs.
-
-Note: chunkWS and accumWS are mutually exclusive.  One is guaranteed to be
-None.  They're both passed so that the same calc function could be used for
-both chunk processing and post processing. Not sure if there's any reason for
-a calc function to do this, but it's at least possible. 
 '''
 
 import sys
@@ -101,7 +54,7 @@ if os.environ.has_key('MANTIDPATH'):
 try:
     from mantid.simpleapi import *
     from mantid.api import IEventWorkspace
-    from mantid.api import Run
+#    from mantid.api import Run
     from mantid.api import PythonAlgorithm, AlgorithmFactory, WorkspaceProperty
     from mantid.kernel import Direction, logger
 except ImportError, e:
@@ -119,6 +72,14 @@ Mantid has been installed.
 # Again, using a hard-coded path
 sys.path.append('/opt/pcaspy/lib64/python2.7/site-packages/pcaspy-0.4.1-py2.7-linux-x86_64.egg')
 from pcaspy import SimpleServer, Driver
+
+# Not quite ready for the daemon stuff yet...
+## Try to use the daemon package.  But continue anyway if it's not available
+#NO_DAEMON_PKG=False
+#try:
+#    import daemon
+#except ImportError:
+#    NO_DAEMON_PKG=True
 
 # Need a few dictionaries here:  two to map PV names to the functions
 # that calculate their values and another to map PV names to their current
@@ -207,6 +168,8 @@ class ChunkProcessing(PythonAlgorithm):
                                                         pv_name = PV,
                                                         run_num = inputWS.getRunNumber()
                                                       )
+                # Note: If you change the list of keyword parameters, be sure
+                # to update README.md!!!
             #else:
                 #logger.error( "No function for calculating value of %s"%PV)
             
@@ -249,6 +212,8 @@ class PostProcessing(PythonAlgorithm):
                                                        pv_name = PV,
                                                        run_num = inputWS.getRunNumber()
                                                      )
+                # Note: If you change the list of keyword parameters, be sure
+                # to update README.md!!!
             #else:
                 #logger.error( "No function for calculating value of %s"%PV)
         
