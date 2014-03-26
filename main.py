@@ -12,7 +12,6 @@ TODO List:
 - There is a perceptible amount of time between the ChunkProcessing and PostProcessing algorithms.  Specifically, it
   was not uncommon for the EVTCNT and EVTCNT_POST to differ when polled with caget.  Need to discuss this with some
   of the instrument scientists and determine if that could cause problems.
-- Figure out how to daemonize python programs.  I think there's a package for that...
 - There a lot more to the pcaspy library to figure out. I think I'm using it properly, but I have no idea about
   any other useful features that might exist. 
 - Figure out a way to specify the mantid library location in the config file (the sys.path.append() and import
@@ -26,6 +25,7 @@ TODO List:
   the PV 
 - Need a setup.py script so I can build RPM's (include an init.d script)
 - Need to remove the hard-coded path extension for importing pcaspy
+- Add proper pidfile handling (need to sort out errors from DaemonContext.open(), first)
 
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
@@ -328,7 +328,7 @@ def main():
         # daemon itself.
         syslog_handler.priority_map['DEBUG'] = 'info'
 
-        formatter = logging.Formatter('%(name)s: - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(name)s [%(process)d]: %(levelname)s - %(message)s')
         syslog_handler.setFormatter( formatter)
         root_logger.addHandler( syslog_handler)
         
