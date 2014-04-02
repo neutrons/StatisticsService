@@ -26,6 +26,8 @@ TODO List:
 - Need a setup.py script so I can build RPM's (include an init.d script)
 - Need to remove the hard-coded path extension for importing pcaspy
 - Add proper pidfile handling (need to sort out errors from DaemonContext.open(), first)
+- Add units to the entries in pvdb
+- Figure out if we should add the asyn field to entries in pvdb
 
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
@@ -73,7 +75,7 @@ Mantid has been installed.
 # pcaspy library for EPICS stuff
 # Again, using a hard-coded path
 sys.path.append('/opt/pcaspy/lib64/python2.7/site-packages/pcaspy-0.4.1-py2.7-linux-x86_64.egg')
-from pcaspy import SimpleServer, Driver
+from pcaspy import SimpleServer, Driver, Alarm, Severity
 
 # Try to use the daemon package.  But continue anyway if it's not available
 NO_DAEMON_PKG=False
@@ -136,10 +138,12 @@ class myDriver(Driver):
         try:
             value = PV_Values[reason]   # reason is the name of the PV (without
                                         # the prefix)
+            self.setParamStatus( reason, Severity.NO_ALARM, Alarm.NO_ALARM)
         except KeyError:
             # Value hasn't been calculated (yet?)
             value = None
             #value = self.getParam(reason)
+            self.setParamStatus( reason, Severity.INVALID_ALARM, Alarm.UDF_ALARM)
                    
         return value  
     
