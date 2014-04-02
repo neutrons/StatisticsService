@@ -40,6 +40,7 @@ Config related tasks:
 import sys
 import os
 import re  # regex processing for the PV calculation callables
+import time  # for the sleep() function
 
 from optparse import OptionParser
 import ConfigParser
@@ -285,6 +286,45 @@ def import_plugins( plugin_dirs, chunk_regex, post_regex):
         # Done loading plugins from the directory, so remove it from sys.path
         sys.path = sys.path[:-1]
         
+def start_live_listener( instrument, is_restart = True):
+    '''
+    Start up the Live Listener algorithm.  If is_restart is true, write an
+    error message to the log.  (We'd only ever restart if the listener aborted
+    for some reason.)
+    '''
+    
+    if is_restart:
+        logger = logging.getLogger( LOGGER_NAME)
+        logger.error( "Restarting the live listener algorithm (which " +
+                      "implies that the algorithm crashed somehow).")
+    
+    # Note: if processing or post-processing algorithms require an
+    # accumulation workspace, then the returned tuple will look like:
+    # (accumWS, outWS, somestr, monitor_alg)
+    sld_return = StartLiveData(
+        Instrument = instrument,
+        AccumulationMethod = 'Add',
+        #AccumulationMethod = 'Append',
+        #AccumulationMethod = 'Replace',
+        #EndRunBehavior = 'Stop',
+        EndRunBehavior = 'Rename',
+        PreserveEvents = True,
+        #PreserveEvents = False,
+        FromNow = True,
+        ProcessingAlgorithm = 'ChunkProcessing',
+        #ProcessingScript = processing_script,
+        #ProcessingProperties = 'Params=10000,1000,40000',
+        PostProcessingAlgorithm = 'PostProcessing',
+        #    PostProcessingProperties = 
+        #UpdateEvery = 5,
+        UpdateEvery = 1,
+        OutputWorkspace = 'myoutWS',
+        AccumulationWorkspace = 'accumWS',
+        )
+    
+    return sld_return[-1]  # last element in sld_return is the MonitorLiveData algorithm
+    
+    
 
 def main():
     '''
@@ -365,7 +405,9 @@ def main():
     main_continued( options)
     
     
-    
+# The main_continued() function was split off of main() so that everything in
+# main_continued() can run in the background process if we are running in
+# daemon mode.  
 def main_continued( options):    
     '''
     Parse the config file, then start up the mantid live listener and begin
@@ -460,50 +502,60 @@ def main_continued( options):
     
     # TODO: Verify that a requested PV only matches a single callable 
     
-    
-
-    # Note: if processing or post-processing algorithms require an
-    # accumulation workspace, then the returned tuple will look like:
-    # (accumWS, outWS, somestr, monitor_alg)
-    sld_return = StartLiveData(
-        Instrument = INSTRUMENT,
-        # This "instrument" actually ends up trying to connect to localhost:31415, so is
-        # good for testing
-        AccumulationMethod = 'Add',
-        #AccumulationMethod = 'Append',
-        #AccumulationMethod = 'Replace',
-        #EndRunBehavior = 'Stop',
-        EndRunBehavior = 'Rename',
-        PreserveEvents = True,
-        #PreserveEvents = False,
-        FromNow = True,
-        ProcessingAlgorithm = 'ChunkProcessing',
-        #ProcessingScript = processing_script,
-        #ProcessingProperties = 'Params=10000,1000,40000',
-        PostProcessingAlgorithm = 'PostProcessing',
-        #    PostProcessingProperties = 
-        #UpdateEvery = 5,
-        UpdateEvery = 1,
-        OutputWorkspace = 'myoutWS',
-        AccumulationWorkspace = 'accumWS',
-        )
-    
     server = SimpleServer()
-
     server.createPV(PV_PREFIX, build_pvdb())
     driver = myDriver()
+    # Note: The Driver base class does some interesting things with
+    # __metaclass__ to automatically register itself with the
+    # SimpleServer.  Thus, the fact that the fact that the driver object
+    # is never referenced again is not an error.
+
+    try:
+        mld_alg = start_live_listener( INSTRUMENT, False)
+    except RuntimeError, e:
+        # If we can't even start the live listener, there probably isn't much
+        # point in continuing.
+        # Experience thus far says this probably happened becase we can't
+        # contact the SMS daemon.
+        logger.critical( "Caught RuntimeError starting live listener: %s"%e.message)
+        logger.critical( "It may be worthwhile to check the Mantid log file for more details")
+        logger.critical( "Aborting.")
+        sys.exit( -1)
+
 
     #for i in range(100):
     while True:
         # process CA transactions
-        server.process(0.1)
+        server.process(1.0)
+        # The value is supposedly in seconds (according to the docs), but
+        # exactly what it means is unclear.  It doesn't seem to have any
+        # bearing on how quickly the function returns, but it does seem to
+        # effect how often the PV's are updated when viewed from an external
+        # camonitor process.
+        
+        # verify the live listener is still running.  Restart it if not.
+        if not mld_alg.isRunning():
+            try:
+                time.sleep(2.0) # The delay will hopefully keep us from 
+                                # flooding the syslog if we get into a state
+                                # where the monitor alg keeps dieing
+                                # immediately after stating up.
+                mld_alg = start_live_listener(INSTRUMENT) 
+            except RuntimeError, e:
+                # Most exceptions that the live listener will throw are caught one level up and just
+                # cause the monitor algorithm to end.  If an exception actually propagates all the
+                # way out to this level, something really bad has happened.
+                logger.critical( "Caught RuntimeError starting live listener: %s"%e.message)
+                logger.critical( "It may be worthwhile to check the Mantid log file for more details")
+                logger.critical( "Aborting.")
+                sys.exit( -1)
+            
             
     # There's currently no clean way to shut this program down.  The cancel()
-    # method isn't currently exposed to python algorithms (though that will
-    # be changing shortly) and even if it was, ther's basically no way to
-    # call it.  Ctrl-C is the best I can think of for now.
-    # Since this code will eventually be a daemon process, that's probably 
-    # an acceptable solution.
+    # method is now exposed to python algorithms, but there's basically no 
+    # good way to call it.  Trapping a Ctrl-C is the best I can think of for
+    # now.  Since this code will normally run as a daemon process, that's
+    # probably an acceptable solution.
 
 
 if __name__ == '__main__':
