@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+
+# First, figure out where we're installed so that we know how to find the
+# main module.  We do this with a combination of $0 and (maybe) $PWD.
+
+# ${0:0:1} returns the first character of the $0 string
+if [ ${0:0:1} == "/" ]
+then
+  # OK, called from an absolute path, just strip off the /bin
+  STATS_HOME=`dirname $0`
+else
+  # Relative path - prepend $PWD
+  STATS_HOME="${PWD}/`dirname $0`"
+fi
+
+# Chop off the '/bin' at the end of STATS_HOME.
+# (Note that if STATS_HOME doesn't end with '/bin', this command won't
+# change anything.  In that case, we should probably spit out a warning.)
+STATS_HOME=${STATS_HOME%/bin}
+
+
+
+python -m $STATS_HOME/lib/mantidstats/main "$@"
