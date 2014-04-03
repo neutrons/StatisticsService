@@ -523,33 +523,48 @@ def main_continued( options):
         sys.exit( -1)
 
 
-    #for i in range(100):
-    while True:
-        # process CA transactions
-        server.process(1.0)
-        # The value is supposedly in seconds (according to the docs), but
-        # exactly what it means is unclear.  It doesn't seem to have any
-        # bearing on how quickly the function returns, but it does seem to
-        # effect how often the PV's are updated when viewed from an external
-        # camonitor process.
-        
-        # verify the live listener is still running.  Restart it if not.
-        if not mld_alg.isRunning():
-            try:
-                time.sleep(2.0) # The delay will hopefully keep us from 
-                                # flooding the syslog if we get into a state
-                                # where the monitor alg keeps dieing
-                                # immediately after stating up.
-                mld_alg = start_live_listener(INSTRUMENT) 
-            except RuntimeError, e:
-                # Most exceptions that the live listener will throw are caught one level up and just
-                # cause the monitor algorithm to end.  If an exception actually propagates all the
-                # way out to this level, something really bad has happened.
-                logger.critical( "Caught RuntimeError starting live listener: %s"%e.message)
-                logger.critical( "It may be worthwhile to check the Mantid log file for more details")
-                logger.critical( "Aborting.")
-                sys.exit( -1)
+    keep_running = True
+    while keep_running:
+    #for i in range(25):
+        try:
+            # process CA transactions
+            server.process(1.0)
+            # The value is supposedly in seconds (according to the docs), but
+            # exactly what it means is unclear.  It doesn't seem to have any
+            # bearing on how quickly the function returns, but it does seem to
+            # effect how often the PV's are updated when viewed from an external
+            # camonitor process.
             
+            # verify the live listener is still running.  Restart it if not.
+            if not mld_alg.isRunning():
+                try:
+                    time.sleep(2.0) # The delay will hopefully keep us from 
+                                    # flooding the syslog if we get into a state
+                                    # where the monitor alg keeps dieing
+                                    # immediately after stating up.
+                    mld_alg = start_live_listener(INSTRUMENT) 
+                except RuntimeError, e:
+                    # Most exceptions that the live listener will throw are caught one level up and just
+                    # cause the monitor algorithm to end.  If an exception actually propagates all the
+                    # way out to this level, something really bad has happened.
+                    logger.critical( "Caught RuntimeError starting live listener: %s"%e.message)
+                    logger.critical( "It may be worthwhile to check the Mantid log file for more details")
+                    logger.critical( "Aborting.")
+                    sys.exit( -1)
+        except KeyboardInterrupt:
+            keep_running = False # Exit from the loop
+    
+            
+    
+    # Stop the live listener algorithm (and wait for it to actually stop)
+    if mld_alg.isRunning():
+        mld_alg.cancel()
+        while mld_alg.isRunning():
+            time.sleep(0.1)
+    
+    # TODO: Are there any other shutdown/cleanup tasks to do here?   
+    return  # end of main_continued()
+    
             
     # There's currently no clean way to shut this program down.  The cancel()
     # method is now exposed to python algorithms, but there's basically no 
