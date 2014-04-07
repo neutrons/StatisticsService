@@ -72,18 +72,21 @@ Mantid has been installed.
     print "Aborting."
     sys.exit(1)
 
-
 # pcaspy library for EPICS stuff
 # Again, using a hard-coded path
 sys.path.append('/opt/pcaspy/lib64/python2.7/site-packages/pcaspy-0.4.1-py2.7-linux-x86_64.egg')
 from pcaspy import SimpleServer, Driver, Alarm, Severity
 
+# -------------------------------------------------------------------------
+# Commented out for now because pcaspy package doesn't play nice with
+# the daemon package
 # Try to use the daemon package.  But continue anyway if it's not available
-NO_DAEMON_PKG=False
-try:
-    import daemon
-except ImportError:
-    NO_DAEMON_PKG=True
+#NO_DAEMON_PKG=False
+#try:
+#    import daemon
+#except ImportError:
+#    NO_DAEMON_PKG=True
+#-----------------------------------------------------------------------------
 
 # Need a few dictionaries here:  two to map PV names to the functions
 # that calculate their values and another to map PV names to their current
@@ -125,8 +128,7 @@ def build_pvdb():
     
     return pvdb
 
-class myDriver(Driver):
-    
+class myDriver(Driver):    
     def __init__(self):
         super(myDriver, self).__init__()
         
@@ -136,6 +138,8 @@ class myDriver(Driver):
         
     def read(self, reason):
         # This is pretty simple - just fetch the correct value from PV_Values
+        logger = logging.getLogger( LOGGER_NAME)
+        logger.debug( "Read request for PV: %s" % reason)
         try:
             value = PV_Values[reason]   # reason is the name of the PV (without
                                         # the prefix)
@@ -301,7 +305,7 @@ def start_live_listener( instrument, is_restart = True):
     # Note: if processing or post-processing algorithms require an
     # accumulation workspace, then the returned tuple will look like:
     # (accumWS, outWS, somestr, monitor_alg)
-    sld_return = StartLiveData(
+    sld_return = StartLiveData(             # @UndefinedVariable
         Instrument = instrument,
         AccumulationMethod = 'Add',
         #AccumulationMethod = 'Append',
@@ -348,13 +352,13 @@ def main():
     parser.add_option("", "--debug",
                       help="Include debugging messages in the log",
                       action="store_true")
-    parser.add_option("", "--no_daemon", dest="no_daemon",
-                      help="Don't start up as a daemon process - remain in the foreground",
-                      action="store_true")
+# Disabling daemoninzing for now because the pcaspy package doen't work properly inside a daemon
+#    parser.add_option("", "--no_daemon", dest="no_daemon",
+#                      help="Don't start up as a daemon process - remain in the foreground",
+#                      action="store_true")
   
     (options, args) = parser.parse_args()
     
-            
     # Set up logging
     root_logger = logging.getLogger()
     if options.console_log:
@@ -390,16 +394,21 @@ def main():
     # Log a warning if there are any extra command line arguments
     if len(args):
         logger.warning( "Extraneous command line arguments: %s" % str(args))
-    
-    # Should we fork and become a daemon?
-    if not options.no_daemon:
-        if NO_DAEMON_PKG == False:
-            logger.debug( "About to fork to background")
-            daemon_context = daemon.DaemonContext()
-            daemon_context.open()
-            logger.debug( "Running as a daemon")  # for reasons that are unclear, this debug statement never shows up!
-        else:
-            logger.warning( "Python daemon library not found.  Cannot daemonize.  Continuing in the foreground.")
+
+
+# ---------------------------------------------------------------------------
+# Daemonization disabled until we can figure out how to make pcaspy work
+# correctly when it's a daemon    
+#    # Should we fork and become a daemon?
+#    if not options.no_daemon:
+#        if NO_DAEMON_PKG == False:
+#            logger.debug( "About to fork to background")
+#            daemon_context = daemon.DaemonContext()
+#            daemon_context.open()
+#            logger.debug( "Running as a daemon")  # for reasons that are unclear, this debug statement never shows up!
+#        else:
+#            logger.warning( "Python daemon library not found.  Cannot daemonize.  Continuing in the foreground.")
+#-----------------------------------------------------------------------------
             
     logger.debug( "Calling main_continued()")
     main_continued( options)
