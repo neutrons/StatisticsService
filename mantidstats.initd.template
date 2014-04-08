@@ -1,0 +1,78 @@
+#!/bin/sh
+# Start/stop mantidstats daemon
+# chkconfig: - 60 80
+
+### BEGIN INIT INFO
+# Provides:          mantidstats
+# Default-Start:
+# Default-Stop:
+# Required-Start:    
+# Required-Stop:     
+# Short-Description: Start mantidstats daemon at boot time
+# Description:       Start/stop the Mantid Statistics Server.
+### END INIT INFO
+
+
+prog="mantidstats"
+exec=__REPLACE_ME_EXEC__
+lockfile=/var/log/subsys/${prog}
+
+CONFIGFILE=__REPLACE_ME_CONFIGFILE__
+PIDFILE=/var/run/${prog}.pid
+RETVAL=0
+
+# Source the function library
+. /etc/rc.d/init.d/functions
+
+start() {
+	[ -x $exec ] || exit 5
+
+	echo -n "Starting Mantid statistics server: "
+	daemon --pidfile="$PIDFILE" $exec -f $CONFIGFILE
+	RETVAL=$?
+	[ $RETVAL -eq 0 ] && touch $lockfile
+	return $RETVAL
+}
+
+stop() {
+	echo -n "Shutting down Mantid statistics server: "
+	killproc -p "$PIDFILE" $exec
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && rm -f $lockfile
+	return $RETVAL
+}
+
+restart() {
+	stop
+	start
+}
+
+reload() {
+	restart
+}
+
+rhstatus() {
+	status -p "$PIDFILE" -l $prog $exec
+}
+
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	restart)
+		restart
+		;;
+	status)
+		rhstatus
+		;;
+	*)
+	echo $"Usage: $0 {start|stop|restart|status}"
+	exit 2
+esac
+exit $?
+
