@@ -38,6 +38,7 @@ Config related tasks:
 '''
 
 import sys
+import signal
 import os
 import re  # regex processing for the PV calculation callables
 import time  # for the sleep() function
@@ -328,6 +329,11 @@ def start_live_listener( instrument, is_restart = True):
     
     return sld_return[-1]  # last element in sld_return is the MonitorLiveData algorithm
     
+def write_pidfile( filename):
+    pid = os.getpid()
+    pidfile = open( filename, "w")
+    pidfile.write("%d\n"%pid)
+    pidfile.close()
     
 
 def main():
@@ -352,6 +358,8 @@ def main():
     parser.add_option("", "--debug",
                       help="Include debugging messages in the log",
                       action="store_true")
+    parser.add_option("-p", "--pidfile", metavar="PIDFILE",
+                       help="Write the process ID to the specified file")
 # Disabling daemoninzing for now because the pcaspy package doen't work properly inside a daemon
 #    parser.add_option("", "--no_daemon", dest="no_daemon",
 #                      help="Don't start up as a daemon process - remain in the foreground",
@@ -424,6 +432,10 @@ def main_continued( options):
     '''
     
     logger = logging.getLogger( LOGGER_NAME)
+    
+    if options.pidfile:
+        logger.debug( "Writing pid file to %s"%options.pidfile)
+        write_pidfile( options.pidfile)
         
     # Read the config file
     config = ConfigParser.ConfigParser()  
@@ -531,9 +543,18 @@ def main_continued( options):
         logger.critical( "Aborting.")
         sys.exit( -1)
 
-
     keep_running = True
-    while keep_running:
+    
+    # register a signal handler so we can exit gracefully if someone kills us
+    global sigterm_received
+    sigterm_received = False
+    def sigterm_handler(signal, frame):
+        global sigterm_received
+        logger.debug( "SIGTERM received")
+        sigterm_received = True
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    
+    while keep_running and not sigterm_received:
     #for i in range(25):
         try:
             # process CA transactions
@@ -561,6 +582,7 @@ def main_continued( options):
                     logger.critical( "Aborting.")
                     sys.exit( -1)
         except KeyboardInterrupt:
+            logger.debug( "Keyboard interrupt")
             keep_running = False # Exit from the loop
     
             
@@ -570,6 +592,8 @@ def main_continued( options):
         mld_alg.cancel()
         while mld_alg.isRunning():
             time.sleep(0.1)
+            
+    logger.info( "Exiting.")
     
     # TODO: Are there any other shutdown/cleanup tasks to do here?   
     return  # end of main_continued()

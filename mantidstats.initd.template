@@ -15,7 +15,6 @@
 
 prog="mantidstats"
 exec=__REPLACE_ME_EXEC__
-lockfile=/var/log/subsys/${prog}
 
 CONFIGFILE=__REPLACE_ME_CONFIGFILE__
 PIDFILE=/var/run/${prog}.pid
@@ -28,9 +27,9 @@ start() {
 	[ -x $exec ] || exit 5
 
 	echo -n "Starting Mantid statistics server: "
-	daemon --pidfile="$PIDFILE" $exec -f $CONFIGFILE
+	daemon --pidfile="$PIDFILE" $exec -f $CONFIGFILE -p $PIDFILE
 	RETVAL=$?
-	[ $RETVAL -eq 0 ] && touch $lockfile
+	echo  # add a newline after the [OK] or [FAILED] message
 	return $RETVAL
 }
 
@@ -39,7 +38,6 @@ stop() {
 	killproc -p "$PIDFILE" $exec
 	RETVAL=$?
 	echo
-	[ $RETVAL -eq 0 ] && rm -f $lockfile
 	return $RETVAL
 }
 
@@ -53,7 +51,7 @@ reload() {
 }
 
 rhstatus() {
-	status -p "$PIDFILE" -l $prog $exec
+	status -p "$PIDFILE" $exec
 }
 
 

@@ -1,4 +1,7 @@
 #!/usr/bin/bash
+# This is really just a helper for the init.d script.
+# If you want to run the program manually, you're probably better off just
+# running python itself.
 
 # First, figure out where we're installed so that we know how to find the
 # main module.  We do this with a combination of $0 and (maybe) $PWD.
@@ -19,5 +22,18 @@ fi
 STATS_HOME=${STATS_HOME%/bin}
 
 
+# Next, try to figure out the MANTIDPATH environment variable
+# NOTE: For now, we want to use mantidnightly, if it exists.
+# Once the next release comes out, we can just go with regular mantid
+if [ -z $MANTIDPATH ]
+then
+	if [ -d /opt/mantidnightly ]
+	then
+		export MANTIDPATH=/opt/mantidnightly/bin
+	else
+		export MANTIDPATH=/opt/Mantid/bin
+	fi
+fi
 
-python -m $STATS_HOME/lib/mantidstats/main "$@"
+
+python $STATS_HOME/lib/mantidstats/main.py "$@" 2>/dev/null >/dev/null &
