@@ -76,7 +76,7 @@ Mantid has been installed.
 # pcaspy library for EPICS stuff
 # Again, using a hard-coded path
 sys.path.append('/opt/pcaspy/lib64/python2.7/site-packages/pcaspy-0.4.1-py2.7-linux-x86_64.egg')
-from pcaspy import SimpleServer, Driver, Alarm, Severity
+from pcaspy import SimpleServer, Driver, Alarm, Severity  # @UnresolvedImport
 
 # -------------------------------------------------------------------------
 # Commented out for now because pcaspy package doesn't play nice with
@@ -311,8 +311,8 @@ def start_live_listener( instrument, is_restart = True):
         AccumulationMethod = 'Add',
         #AccumulationMethod = 'Append',
         #AccumulationMethod = 'Replace',
-        #EndRunBehavior = 'Stop',
-        EndRunBehavior = 'Rename',
+        #RunTransitionBehavior = 'Stop',
+        RunTransitionBehavior = 'Rename',
         PreserveEvents = True,
         #PreserveEvents = False,
         FromNow = True,
@@ -525,7 +525,7 @@ def main_continued( options):
     
     server = SimpleServer()
     server.createPV(PV_PREFIX, build_pvdb())
-    driver = myDriver()
+    driver = myDriver()  # @UnusedVariable
     # Note: The Driver base class does some interesting things with
     # __metaclass__ to automatically register itself with the
     # SimpleServer.  Thus, the fact that the fact that the driver object
@@ -538,7 +538,7 @@ def main_continued( options):
         # point in continuing.
         # Experience thus far says this probably happened becase we can't
         # contact the SMS daemon.
-        logger.critical( "Caught RuntimeError starting live listener: %s"%e.message)
+        logger.critical( "Caught RuntimeError starting live listener: %s"%e)
         logger.critical( "It may be worthwhile to check the Mantid log file for more details")
         logger.critical( "Aborting.")
         sys.exit( -1)
@@ -577,7 +577,7 @@ def main_continued( options):
                     # Most exceptions that the live listener will throw are caught one level up and just
                     # cause the monitor algorithm to end.  If an exception actually propagates all the
                     # way out to this level, something really bad has happened.
-                    logger.critical( "Caught RuntimeError starting live listener: %s"%e.message)
+                    logger.critical( "Caught RuntimeError starting live listener: %s"%e)
                     logger.critical( "It may be worthwhile to check the Mantid log file for more details")
                     logger.critical( "Aborting.")
                     sys.exit( -1)
