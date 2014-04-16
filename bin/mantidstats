@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 # This is really just a helper for the init.d script.
 # If you want to run the program manually, you're probably better off just
 # running python itself.
