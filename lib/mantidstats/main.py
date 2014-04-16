@@ -12,8 +12,6 @@ TODO List:
 - There is a perceptible amount of time between the ChunkProcessing and PostProcessing algorithms.  Specifically, it
   was not uncommon for the EVTCNT and EVTCNT_POST to differ when polled with caget.  Need to discuss this with some
   of the instrument scientists and determine if that could cause problems.
-- There a lot more to the pcaspy library to figure out. I think I'm using it properly, but I have no idea about
-  any other useful features that might exist. 
 - Figure out a way to specify the mantid library location in the config file (the sys.path.append() and import
   statements are normally executed well before the config file is parsed...)
 - If we don't have any PV's that require the post-processing step, then don't set the 'PreserveEvents' and
@@ -23,9 +21,7 @@ TODO List:
   they encounter errors.  Have the ChunkProcessing and PostProcessing
   algorithms trap the exceptions and set the appropriate EPICS error flags for
   the PV 
-- Need a setup.py script so I can build RPM's (include an init.d script)
 - Need to remove the hard-coded path extension for importing pcaspy
-- Add proper pidfile handling (need to sort out errors from DaemonContext.open(), first)
 - Add units to the entries in pvdb
 - Figure out if we should add the asyn field to entries in pvdb
 
