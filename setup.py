@@ -4,17 +4,29 @@ Created on Mar 24, 2014
 @author: xmr
 '''
 
+# Note: the bdist_rpm option unfortunately doesn't support creating files
+# marked as %config(noreplace).  ie: there's no way to prevent users' custom
+# config files from being overwritten by files in the RPM...
+#
+# Because of this, the script will not actually install anything into /etc
+# or /etc/init.d.  It's assumed that the admin will copy config and init
+# scripts over to those locations (and possibly modify them) after the initial
+# install.  This isn't a great solution, but it's better than having custom
+# init and config files overwritten every time someone does a 'yum update'
+
+
 from distutils.core import setup
 import sys
 import os
 import os.path
 
 # Install directories
-PREFIX  = "/opt/mantidstats"
-LIBDIR  = "%s/lib"%PREFIX
-BINDIR  = "%s/bin"%PREFIX
-CONFDIR = "%s/etc"%PREFIX
-INITDIR = "/etc/init.d"
+PREFIX        = "/opt/mantidstats"
+LIBDIR        = "%s/lib"%PREFIX
+BINDIR        = "%s/bin"%PREFIX
+CONFDIR       = "%s/etc"%PREFIX
+FACILITIESDIR = "%s/facilities"%CONFDIR
+INITDIR       = "%s/init.d"%CONFDIR
 
 INIT_SCRIPT_NAME='mantidstats'
 
@@ -86,6 +98,7 @@ configuration file.
 # various non-python files
 data_files = [ (CONFDIR, ['mantidstats.conf']),
                (INITDIR, [INIT_SCRIPT_NAME]),
+               (FACILITIESDIR, ['facilities/CORELLI.xml'])
              ]
 
 # In the process of building the rpm package, this setup.py file actually gets

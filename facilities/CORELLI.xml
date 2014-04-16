@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<facilities>
+
+<facility name="SNS" delimiter="_" FileExtensions=".nxs.h5,_event.nxs,.nxs,.dat,_runinfo.xml,_histo.nxs">
+
+   <instrument name="CORELLI" beamline="9"> 
+	<technique>Neutron Diffraction</technique>
+	<technique>Diffuse Scattering</technique>
+	<livedata address="bl9-sms.sns.gov:31415" />
+   </instrument> 
+
+   <livedata listener="SNSLiveEventDataListener"/>
+
+      
+</facility>
+
+</facilities>

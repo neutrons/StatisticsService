@@ -63,6 +63,7 @@ try:
 #    from mantid.api import Run
     from mantid.api import PythonAlgorithm, AlgorithmFactory, WorkspaceProperty
     from mantid.kernel import Direction
+    import mantid.kernel
 except ImportError, e:
     print """
 Failed to import the Mantid framework libraries.
@@ -459,6 +460,28 @@ def main_continued( options):
     BEAMLINE_PREFIX = config.get("Beamline Config", "BEAMLINE_PREFIX")
     PV_PREFIX = BEAMLINE_PREFIX + ":CS:"
     
+    # Check to see if we need to override Mantid's default facilities
+    if config.has_option("Beamline Config", "FACILITY_FILE"):
+        facility_file = config.get("Beamline Config", "FACILITY_FILE")
+        logger.info( "Replacing default Mantid facilities file with: '%s'"%facility_file)
+        mantid.kernel.config.updateFacilities( facility_file)
+        
+    # Verify that Mantid recognizes the instrument
+    if (INSTRUMENT != "SNSLiveEventDataListener"): 
+    # SNSLiveEventDataListener isn't a valid instrument, but it is hard-coded
+    # into the Mantid code for debug purposes, so we'll allow it here, too.
+        try:
+            inst_info = mantid.kernel.config.getInstrument( INSTRUMENT)
+        except:
+            logger.critical( "Couldn't find instrument named '%s'"%INSTRUMENT )
+            logger.critical( "Verify that the 'INSTRUMENT' parameter is " + \
+                             "specified properly in the config file and that " + \
+                             "the modified facilities file (if used) is also " + \
+                             "correct.")
+            logger.critical( "Aborting")
+            sys.exit(1)
+        logger.debug( "SMS Server: %s"%inst_info.instdae())
+    
     # ConfigParser doesn't recognize lists of items, so what we get back is a
     # single string that we split into a list ourselves
     pv_list_str = config.get("Beamline Config", "PROCESS_VARIABLES")
@@ -469,7 +492,7 @@ def main_continued( options):
     if config.has_option("System Config", "PLUGINS_DIRS"):
         plugdir_list_str = config.get("System Config", "PLUGINS_DIRS")
         plugin_dirs.extend( [i.strip() for i in plugdir_list_str.split(',')])
-        
+         
     # Done with the config file
 
 

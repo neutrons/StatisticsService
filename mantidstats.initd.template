@@ -16,6 +16,7 @@
 prog="mantidstats"
 exec=__REPLACE_ME_EXEC__
 
+# Replace this with the name of the actual config file
 CONFIGFILE=__REPLACE_ME_CONFIGFILE__
 PIDFILE=/var/run/${prog}.pid
 RETVAL=0
