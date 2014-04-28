@@ -26,9 +26,11 @@ LIBDIR        = "%s/lib"%PREFIX
 BINDIR        = "%s/bin"%PREFIX
 CONFDIR       = "%s/etc"%PREFIX
 FACILITIESDIR = "%s/facilities"%CONFDIR
-INITDIR       = "%s/init.d"%CONFDIR
+INITDIR       = "/etc/init.d"
 
 INIT_SCRIPT_NAME='mantidstats'
+INSTALL_SCRIPT_NAME='mantidstats_post_install'
+UNINSTALL_SCRIPT_NAME='mantidstats_pre_uninstall'
 
 # I want to specify some non-standard install directories and the easiest
 # way to do that is with a setup.cfg file.  Unfortunately, the values in
@@ -60,12 +62,13 @@ def generate_init_script():
             outfile.write(l[0:n])
             outfile.write("%s/mantidstats\n"%BINDIR)
             continue
-        
-        n = l.find('__REPLACE_ME_CONFIGFILE__')
-        if n != -1:
-            outfile.write(l[0:n])
-            outfile.write("%s/mantidstats.conf\n"%CONFDIR)
-            continue
+
+# Don't need to mess with config file locations any more        
+#        n = l.find('__REPLACE_ME_CONFIGFILE__')
+#        if n != -1:
+#            outfile.write(l[0:n])
+#            outfile.write("%s/mantidstats.conf\n"%CONFDIR)
+#            continue
         
         outfile.write(l)
         
@@ -77,6 +80,30 @@ def generate_init_script():
 def remove_init_script():
     os.remove( INIT_SCRIPT_NAME)
 
+# Create the postinstall script
+def generate_install_script():
+    outfile = open(INSTALL_SCRIPT_NAME, 'w')
+    outfile.write('''
+/sbin/chkconfig --level 345 %s on
+'''%INIT_SCRIPT_NAME)
+    outfile.close()
+
+# remove the postinstall script once we're done with it
+def remove_install_script():
+    os.remove( INSTALL_SCRIPT_NAME)
+
+# Create the preuninstall script
+def generate_uninstall_script():
+    outfile = open(UNINSTALL_SCRIPT_NAME, 'w')
+    outfile.write('''
+/sbin/chkconfig --del %s
+'''%INIT_SCRIPT_NAME)
+    outfile.close()
+# TODO: Should the pre-uninstall script attempt to stop a running mantidstats process?
+    
+# remove the preuninstall script once we're done with it
+def remove_uninstall_script():
+    os.remove( UNINSTALL_SCRIPT_NAME)
 
 
 
@@ -107,6 +134,9 @@ data_files = [ (CONFDIR, ['mantidstats.conf']),
 if sys.argv[1] == 'bdist_rpm':
     # Generate an init.d script with the proper directory names in it
     generate_init_script()
+    
+    generate_install_script()
+    generate_uninstall_script()
 
     # If a setup.cfg file exists, don't overwrite it.
     # (We'll just have to hope that whoever put the file there
@@ -118,7 +148,7 @@ if sys.argv[1] == 'bdist_rpm':
         create_temp_cfg_file()
 
 setup(name='MantidStatisticsServer',
-      version='0.7Beta',
+      version='0.8Beta',
       description="A utility to generate EPICS PV's from the SNS ADARA stream",
       long_description= long_desc,
       author='Ross Miller',
@@ -134,11 +164,15 @@ setup(name='MantidStatisticsServer',
       packages = ['mantidstats','mantidstats.plugins'],
       scripts = ['bin/mantidstats'],
       data_files = data_files,
+      options = {'bdist_rpm':{'post_install' : INSTALL_SCRIPT_NAME,
+                              'pre_uninstall' : UNINSTALL_SCRIPT_NAME}},
      )
 
 if sys.argv[1] == 'bdist_rpm':
     if delete_setup_cfg:
         remove_temp_cfg_file()
 
+    remove_install_script()
+    remove_uninstall_script()
     remove_init_script()
 

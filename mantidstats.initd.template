@@ -16,16 +16,27 @@
 prog="mantidstats"
 exec=__REPLACE_ME_EXEC__
 
-# Replace this with the name of the actual config file
-CONFIGFILE=__REPLACE_ME_CONFIGFILE__
+# The default config file will be chosen down in start().
+# If you want to override the default, replace "" with the full
+# pathname of the file you want to use.
+CONFIGFILE=""
+
 PIDFILE=/var/run/${prog}.pid
 RETVAL=0
 
 # Source the function library
 . /etc/rc.d/init.d/functions
 
+# figure out which beamline we're on from the hostname
+BEAMLINE=`hostname -s | sed 's/-.*//'`
+
 start() {
 	[ -x $exec ] || exit 5
+
+	if [ -z $CONFIGFILE ]
+	then	
+		CONFIGFILE="/home/controls/${BEAMLINE}/mantidstats/mantidstats.conf"		
+	fi
 
 	echo -n "Starting Mantid statistics server: "
 	daemon --pidfile="$PIDFILE" $exec -f $CONFIGFILE -p $PIDFILE
