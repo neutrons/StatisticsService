@@ -21,7 +21,10 @@ exec=__REPLACE_ME_EXEC__
 # pathname of the file you want to use.
 CONFIGFILE=""
 
-PIDFILE=/var/run/${prog}.pid
+USER=__REPLACE_ME_USER__
+
+PIDDIR=__REPLACE_ME_PIDDIR__
+PIDFILE=${PIDDIR}/${prog}.pid
 RETVAL=0
 
 # Source the function library
@@ -39,7 +42,7 @@ start() {
 	fi
 
 	echo -n "Starting Mantid statistics server: "
-	daemon --pidfile="$PIDFILE" $exec -f $CONFIGFILE -p $PIDFILE
+	daemon --pidfile="$PIDFILE" --user=$USER $exec -f $CONFIGFILE -p $PIDFILE
 	RETVAL=$?
 	echo  # add a newline after the [OK] or [FAILED] message
 	return $RETVAL

@@ -32,6 +32,10 @@ INIT_SCRIPT_NAME='mantidstats'
 INSTALL_SCRIPT_NAME='mantidstats_post_install'
 UNINSTALL_SCRIPT_NAME='mantidstats_pre_uninstall'
 
+USER = "controls"  # The user that will normally execute the daemon
+GROUP= "slowcontrols_developers"
+PIDDIR="/var/run/mantidstats"  # Where the pid file will be written
+
 # I want to specify some non-standard install directories and the easiest
 # way to do that is with a setup.cfg file.  Unfortunately, the values in
 # that file are not available to this script.  So, this function creates a
@@ -62,6 +66,18 @@ def generate_init_script():
             outfile.write(l[0:n])
             outfile.write("%s/mantidstats\n"%BINDIR)
             continue
+        
+        n = l.find('__REPLACE_ME_USER__')
+        if n != -1:
+            outfile.write(l[0:n])
+            outfile.write("%s\n"%USER)
+            continue
+        
+        n = l.find('__REPLACE_ME_PIDDIR__')
+        if n != -1:
+            outfile.write(l[0:n])
+            outfile.write("%s\n"%PIDDIR)
+            continue
 
 # Don't need to mess with config file locations any more        
 #        n = l.find('__REPLACE_ME_CONFIGFILE__')
@@ -84,8 +100,12 @@ def remove_init_script():
 def generate_install_script():
     outfile = open(INSTALL_SCRIPT_NAME, 'w')
     outfile.write('''
+mkdir -p %s
+chown %s.%s %s
 /sbin/chkconfig --level 345 %s on
-'''%INIT_SCRIPT_NAME)
+'''%(PIDDIR,
+     USER, GROUP, PIDDIR,
+     INIT_SCRIPT_NAME))
     outfile.close()
 
 # remove the postinstall script once we're done with it
@@ -97,7 +117,9 @@ def generate_uninstall_script():
     outfile = open(UNINSTALL_SCRIPT_NAME, 'w')
     outfile.write('''
 /sbin/chkconfig --del %s
-'''%INIT_SCRIPT_NAME)
+rmdir %s
+'''% (INIT_SCRIPT_NAME,
+      PIDDIR))
     outfile.close()
 # TODO: Should the pre-uninstall script attempt to stop a running mantidstats process?
     
