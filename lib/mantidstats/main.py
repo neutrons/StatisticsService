@@ -295,8 +295,9 @@ def start_live_listener( instrument, is_restart = True):
     for some reason.)
     '''
     
+    logger = logging.getLogger( LOGGER_NAME)
+    
     if is_restart:
-        logger = logging.getLogger( LOGGER_NAME)
         logger.error( "Restarting the live listener algorithm (which " +
                       "implies that the algorithm crashed somehow).")
     
@@ -309,7 +310,8 @@ def start_live_listener( instrument, is_restart = True):
         #AccumulationMethod = 'Append',
         #AccumulationMethod = 'Replace',
         #RunTransitionBehavior = 'Stop',
-        RunTransitionBehavior = 'Rename',
+        #RunTransitionBehavior = 'Rename',
+        RunTransitionBehavior = 'Restart',
         PreserveEvents = True,
         #PreserveEvents = False,
         FromNow = True,
@@ -324,7 +326,15 @@ def start_live_listener( instrument, is_restart = True):
         AccumulationWorkspace = 'accumWS',
         )
     
-    return sld_return[-1]  # last element in sld_return is the MonitorLiveData algorithm
+    mld_alg = sld_return[-1] # last element in sld_return is the MonitorLiveData algorithm
+    # Wait for the mld algorithm to actually start
+    # TOD: Put some kind of timeout in here!
+    if not mld_alg.isRunning():
+        logger.debug( "Waiting for MonitorLiveData algorithm to start")
+        time.sleep(0.1)
+    
+    logger.debug( "MonitorLiveData algorithm now running")
+    return mld_alg   
     
 def write_pidfile( filename):
     pid = os.getpid()
@@ -606,7 +616,7 @@ def main_continued( options):
     
             
     
-    # Stop the live listener algorithm (and wait for it to actually stop)
+    # Stop the monitor live data algorithm (and wait for it to actually stop)
     if mld_alg.isRunning():
         mld_alg.cancel()
         while mld_alg.isRunning():
