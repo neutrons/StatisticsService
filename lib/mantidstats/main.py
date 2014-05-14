@@ -14,8 +14,6 @@ TODO List:
   of the instrument scientists and determine if that could cause problems.
 - Figure out a way to specify the mantid library location in the config file (the sys.path.append() and import
   statements are normally executed well before the config file is parsed...)
-- If we don't have any PV's that require the post-processing step, then don't set the 'PreserveEvents' and
-  'PostProcessingAlgorithm' parameters in StartLiveListener()  (saves memory and CPU cycles down in Mantid)
 - Add code to handle improper regex strings in plugin definitions
 - Define one or more exceptions for the calculation functions to throw when
   they encounter errors.  Have the ChunkProcessing and PostProcessing
@@ -300,6 +298,19 @@ def start_live_listener( instrument, is_restart = True):
     if is_restart:
         logger.error( "Restarting the live listener algorithm (which " +
                       "implies that the algorithm crashed somehow).")
+        
+    # Check to see if we need the PostProcessing algorithm.  Not calling
+    # it will save a fair amount of CPU time.  Also, if we don't need
+    # it, then we don't need to preserve events, which could save a fair
+    # amount of RAM, especially on long running runs.  (We have to set
+    # the value to True in order to force the workspace passed to the
+    # PostProcessing alg to be an EventWorkspace.)
+    if len( PV_Functions_Post):
+        post_proc_alg = 'PostProcessing'
+        preserve_events = True
+    else:
+        post_proc_alg = None
+        preserve_events = False
     
     # Note: if processing or post-processing algorithms require an
     # accumulation workspace, then the returned tuple will look like:
@@ -312,13 +323,21 @@ def start_live_listener( instrument, is_restart = True):
         #RunTransitionBehavior = 'Stop',
         #RunTransitionBehavior = 'Rename',
         RunTransitionBehavior = 'Restart',
-        PreserveEvents = True,
+        PreserveEvents = preserve_events,
         #PreserveEvents = False,
         FromNow = True,
+        #FromNow = False,  # defaults to True, so have to explicitly set it to
+                          # False if you want to use one of the other options
+        #FromStartOfRun = True,
+        # TODO: I'm not sure about using 'FromStartOfRun'.  If the service 
+        # in the middle of a run, replaying from the start makes sense.
+        # However, if we're not in the middle of a run when the live listener
+        # is started, then this option will cause the listener to ignore all
+        # data until a run does start...
         ProcessingAlgorithm = 'ChunkProcessing',
         #ProcessingScript = processing_script,
         #ProcessingProperties = 'Params=10000,1000,40000',
-        PostProcessingAlgorithm = 'PostProcessing',
+        PostProcessingAlgorithm = post_proc_alg,
         #    PostProcessingProperties = 
         #UpdateEvery = 5,
         UpdateEvery = 1,
