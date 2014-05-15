@@ -36,6 +36,6 @@ then
 fi
 
 # Dial back the number of openMP threads that the Mantid libs will spawn
-# export OMP_NUM_THREADS = 2
+export OMP_NUM_THREADS=2
 
 python $STATS_HOME/lib/mantidstats/main.py "$@" 2>/dev/null >/dev/null &
