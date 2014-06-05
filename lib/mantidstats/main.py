@@ -134,8 +134,11 @@ class myDriver(Driver):
         
     def read(self, reason):
         # This is pretty simple - just fetch the correct value from PV_Values
-        logger = logging.getLogger( LOGGER_NAME)
-        logger.debug( "Read request for PV: %s" % reason)
+
+        # Commented out the logging because it's too verbose even for DEBUG
+        #logger = logging.getLogger( LOGGER_NAME)
+        #logger.debug( "Read request for PV: %s" % reason)
+
         try:
             value = PV_Values[reason]   # reason is the name of the PV (without
                                         # the prefix)
@@ -601,6 +604,32 @@ def main_continued( options):
         logger.debug( "SIGTERM received")
         sigterm_received = True
     signal.signal(signal.SIGTERM, sigterm_handler)
+    
+    if options.debug:
+        # Register signal handlers for SIGUSR1 & SIGUSR2 to do some
+        # useful debuggy stuff
+        try:
+            # A package useful for debugging memory leaks.
+            # If it doesn't exist, just keep going.  
+            import objgraph
+            # register a signal handler to dump some debug info when we send it a sigusr1
+            def sigusr1_handler(signal, frame):
+                logger.info( "######SIGUSR1 Received######")
+                # Unfortunately, the objgraph functions use 'print', so I haven't figured out
+                # how to get them into the logger...
+                objgraph.show_most_common_types()
+                objgraph.show_growth( limit=3)
+                logger.info( "###########################")
+            signal.signal( signal.SIGUSR1, sigusr1_handler)
+        except ImportError:
+            logger.warning( "Skipping SIGUSR1 handler because 'objgraph' package wasn't found")
+    
+        # register a signal handler to dump us into the debugger when we send a sigusr2
+        def sigusr2_handler(sig, frame):
+            import pdb
+            pdb.Pdb().set_trace(frame)
+        signal.signal(signal.SIGUSR2, sigusr2_handler)
+
     
     while keep_running and not sigterm_received:
     #for i in range(25):
