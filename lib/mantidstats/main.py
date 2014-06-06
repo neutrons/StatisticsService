@@ -68,10 +68,7 @@ Mantid has been installed.
     print "Aborting."
     sys.exit(1)
 
-# pcaspy library for EPICS stuff
-# Again, using a hard-coded path
-sys.path.append('/opt/pcaspy/lib64/python2.7/site-packages/pcaspy-0.4.1-py2.7-linux-x86_64.egg')
-from pcaspy import SimpleServer, Driver, Alarm, Severity  # @UnresolvedImport
+from epics import PV
 
 # -------------------------------------------------------------------------
 # Commented out for now because pcaspy package doesn't play nice with
@@ -85,8 +82,8 @@ from pcaspy import SimpleServer, Driver, Alarm, Severity  # @UnresolvedImport
 #-----------------------------------------------------------------------------
 
 # Need a few dictionaries here:  two to map PV names to the functions
-# that calculate their values and another to map PV names to their current
-# values.  Also need a list to hold the PV names the user wants us to 
+# that calculate their values and another to map PV names their associated
+# epics.PV object.  Also need a list to hold the PV names the user wants us to 
 # calculate.
 # 
 # TODO: Find a way avoid having to use global variables here.  The problem
@@ -95,7 +92,7 @@ from pcaspy import SimpleServer, Driver, Alarm, Severity  # @UnresolvedImport
 # constructors...
 PV_Functions_Chunk = {}
 PV_Functions_Post = {}
-PV_Values = {}
+PV_Objs = {}
 PROCESS_VARIABLES = []
 
 # Another global: The name of the logger object.  Using a global so that all
@@ -106,50 +103,14 @@ PROCESS_VARIABLES = []
 LOGGER_NAME="MantidStats"
 
 
-def build_pvdb():
+def init_PV_objs( pv_prefix):
     '''
-    Generates the pvdb dictionary to pass to createPV()
+    Create PV objects for each variable in PROCESS_VARIABLES
     '''
-    pvdb = { }
     
+    #logger = logging.getLogger(LOGGER_NAME)
     for name in PROCESS_VARIABLES:
-        pvdb[name] = { 'prec' : 5, 'scan' : 1}
-        # for now, all variables will have a precision of 5
-        # There's a lot of other fields we could add, so we might want to make
-        # this more customizable.
-        #
-        # The scan field should probably match the UpdateEvery parameter to
-        # StartLiveData.  (There's no point having the PV update any faster
-        # than the live listener runs.) 
-    
-    return pvdb
-
-class myDriver(Driver):    
-    def __init__(self):
-        super(myDriver, self).__init__()
-        
-        # initialize a holder for the event counts (so we have something to
-        # return if we hit an exception trying to update.  See read() below.)
-        self._EventCounts = 0
-        
-    def read(self, reason):
-        # This is pretty simple - just fetch the correct value from PV_Values
-
-        # Commented out the logging because it's too verbose even for DEBUG
-        #logger = logging.getLogger( LOGGER_NAME)
-        #logger.debug( "Read request for PV: %s" % reason)
-
-        try:
-            value = PV_Values[reason]   # reason is the name of the PV (without
-                                        # the prefix)
-            self.setParamStatus( reason, Severity.NO_ALARM, Alarm.NO_ALARM)
-        except KeyError:
-            # Value hasn't been calculated (yet?)
-            value = None
-            #value = self.getParam(reason)
-            self.setParamStatus( reason, Severity.INVALID_ALARM, Alarm.UDF_ALARM)
-                   
-        return value  
+        PV_Objs[name] = PV( pv_prefix + name)
     
 class ChunkProcessing(PythonAlgorithm):
     def PyInit(self):
@@ -170,27 +131,33 @@ class ChunkProcessing(PythonAlgorithm):
             logger.error( "InputWorkspace was a type '%s' instead of an IEventWorkspace"%type(inputWS).__name__)
             logger.error( "Attempting to continue, but this is likely to cause Mantid to crash eventually.")
                         
-        for PV in PROCESS_VARIABLES:
-            if PV in PV_Functions_Chunk:
+        for pv_name in PROCESS_VARIABLES:
+            if pv_name in PV_Functions_Chunk:
+                
+                if not PV_Objs[pv_name].connect():
+                    logger.error( "PV '%s' is not connected!"%PV_Objs[pv_name].pvname)
+                    
                 # Note: Always use keyword args when calling the PV functions.
                 # Positional arguments are not allowed because we didn't want
                 # to force a particular function signature on everyone.
                 # Instead, we document what keywords are passed and what they
                 # mean; authors of PV functions can pick and choose which
-                # keywords are important to their particular function.
-                PV_Values[PV] = PV_Functions_Chunk[PV]( chunkWS = inputWS,
-                                                        accumWS = None,
-                                                        pv_name = PV,
-                                                        run_num = inputWS.getRunNumber(),
-                                                        logger_name = LOGGER_NAME
-                                                      )
+                # keywords are important to their particular function. 
+                PV_Objs[pv_name].value =  \
+                    PV_Functions_Chunk[pv_name]( chunkWS = inputWS,
+                                                 accumWS = None,
+                                                 pv_name = pv_name,
+                                                 run_num = inputWS.getRunNumber(),
+                                                 logger_name = LOGGER_NAME
+                                                )
                 # Note: If you change the list of keyword parameters, be sure
                 # to update README.md!!!
             #else:
-                #logger.error( "No function for calculating value of %s"%PV)
+                #logger.error( "No function for calculating value of %s"%pv_name)
             
         # Since we don't modify the data in any way, we don't need to copy
         # the input over to the output workspace.
+        logger.debug( "ChunkProcessing algorithm complete")
             
 AlgorithmFactory.subscribe( ChunkProcessing())
 
@@ -216,24 +183,29 @@ class PostProcessing(PythonAlgorithm):
             # want to make that optional if we start running out of memory because the workspaces
             # are getting too big.
                         
-        for PV in PROCESS_VARIABLES:
-            if PV in PV_Functions_Post:
+        for pv_name in PROCESS_VARIABLES:
+            if pv_name in PV_Functions_Post:
+                
+                if not PV_Objs[pv_name].connect():
+                    logger.error( "PV '%s' is not connected!"%PV_Objs[pv_name].pvname)
+                    
                 # Note: Always use keyword args when calling the PV functions.
                 # Positional arguments are not allowed because we didn't want
                 # to force a particular function signature on everyone.
                 # Instead, we document what keywords are passed and what they
                 # mean; authors of PV functions can pick and choose which
                 # keywords are important to their particular function.
-                PV_Values[PV] = PV_Functions_Post[PV]( chunkWS = None,
-                                                       accumWS = inputWS,
-                                                       pv_name = PV,
-                                                       run_num = inputWS.getRunNumber(),
-                                                       logger_name = LOGGER_NAME
-                                                     )
+                PV_Objs[pv_name].value =  \
+                    PV_Functions_Post[pv_name]( chunkWS = None,
+                                                accumWS = inputWS,
+                                                pv_name = pv_name,
+                                                run_num = inputWS.getRunNumber(),
+                                                logger_name = LOGGER_NAME
+                                              )
                 # Note: If you change the list of keyword parameters, be sure
                 # to update README.md!!!
             #else:
-                #logger.error( "No function for calculating value of %s"%PV)
+                #logger.error( "No function for calculating value of %s"%pv_name)
         
         # Last step - copy the input over to the output
         #outputWS = mtd[ self.getPropertyValue("OutputWorkspace")]
@@ -244,6 +216,7 @@ class PostProcessing(PythonAlgorithm):
         # it doesn't.  Russell is looking in to both these problems.  In the
         # meantime, clone() works fine.
         inputWS.clone(OutputWorkspace = self.getPropertyValue("OutputWorkspace"))
+        logger.debug( "PostProcessing algorithm complete")
         
 AlgorithmFactory.subscribe( PostProcessing())  
 
@@ -572,16 +545,12 @@ def main_continued( options):
             logger.error( "Could not match PV '%s' to any calculation function"%pv_name)
             
     
-    # TODO: Verify that a requested PV only matches a single callable 
+    # TODO: Verify that a requested PV only matches a single callable
     
-    server = SimpleServer()
-    server.createPV(PV_PREFIX, build_pvdb())
-    driver = myDriver()  # @UnusedVariable
-    # Note: The Driver base class does some interesting things with
-    # __metaclass__ to automatically register itself with the
-    # SimpleServer.  Thus, the fact that the fact that the driver object
-    # is never referenced again is not an error.
-
+    # Create the PV objects
+    init_PV_objs( PV_PREFIX) 
+    
+    # Attempt the start the mantid live listener
     try:
         mld_alg = start_live_listener( INSTRUMENT, False)
     except RuntimeError, e:
@@ -634,21 +603,8 @@ def main_continued( options):
     while keep_running and not sigterm_received:
     #for i in range(25):
         try:
-            # process CA transactions
-            server.process(1.0)
-            # The value is supposedly in seconds (according to the docs), but
-            # exactly what it means is unclear.  It doesn't seem to have any
-            # bearing on how quickly the function returns, but it does seem to
-            # effect how often the PV's are updated when viewed from an external
-            # camonitor process.
-            
-            # verify the live listener is still running.  Restart it if not.
             if not mld_alg.isRunning():
                 try:
-                    time.sleep(2.0) # The delay will hopefully keep us from 
-                                    # flooding the syslog if we get into a state
-                                    # where the monitor alg keeps dieing
-                                    # immediately after stating up.
                     mld_alg = start_live_listener(INSTRUMENT) 
                 except RuntimeError, e:
                     # Most exceptions that the live listener will throw are caught one level up and just
@@ -658,6 +614,10 @@ def main_continued( options):
                     logger.critical( "It may be worthwhile to check the Mantid log file for more details")
                     logger.critical( "Aborting.")
                     sys.exit( -1)
+            
+            # Assuming everything is running normally, we don't want to
+            # spinlock the CPU...
+            time.sleep(2.0) 
         except KeyboardInterrupt:
             logger.debug( "Keyboard interrupt")
             keep_running = False # Exit from the loop
