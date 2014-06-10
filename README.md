@@ -30,3 +30,5 @@ The following keywords are passed to every PV calculation function when it is ca
 Note: chunkWS and accumWS are mutually exclusive.  One is guaranteed to be None.  They're both passed so that the same calc function could be used for both chunk processing and post processing. Not sure if there's any reason for a calc function to do this, but it's at least possible.
 
 
+## PyEpics Library
+The code under lib/epics is actually from the PyEpics library, available [here](http://pyepics.github.io/pyepics/overview.html).  It is licensed under the Epics Open License and the copyright is held by Matthew Newville <newville@cars.uchicago.edu> CARS, University of Chicago.
