@@ -70,6 +70,8 @@ Mantid has been installed.
 
 from epics import PV
 
+import softioc_files
+
 # -------------------------------------------------------------------------
 # Commented out for now because pcaspy package doesn't play nice with
 # the daemon package
@@ -330,7 +332,17 @@ def start_live_listener( instrument, is_restart = True):
     
     logger.debug( "MonitorLiveData algorithm now running")
     return mld_alg   
+
+def generate_softioc_files(pv_names, prefix):
+    '''
+    Writes on the config files needed for the softIoc binary
+    '''
+    db_name = '/tmp/mantidstats.db'
+    cmd_name = '/tmp/mantidstats.cmd'
+    softioc_files.generateDbFile(db_name, pv_names)
+    softioc_files.generateCmdFile(cmd_name, db_name, prefix)
     
+        
 def write_pidfile( filename):
     pid = os.getpid()
     pidfile = open( filename, "w")
@@ -362,6 +374,11 @@ def main():
                       action="store_true")
     parser.add_option("-p", "--pidfile", metavar="PIDFILE",
                        help="Write the process ID to the specified file")
+    parser.add_option("", "--generate_softioc_files",
+                      help="Generate the config files needed for the softIoc" +
+                      " binary.\nThe softIoc command will be: '[<path>]softIoc /tmp/mantidstats.cmd",
+                      action="store_true")
+    
 # Disabling daemoninzing for now because the pcaspy package doen't work properly inside a daemon
 #    parser.add_option("", "--no_daemon", dest="no_daemon",
 #                      help="Don't start up as a daemon process - remain in the foreground",
@@ -493,9 +510,15 @@ def main_continued( options):
     if config.has_option("System Config", "PLUGINS_DIRS"):
         plugdir_list_str = config.get("System Config", "PLUGINS_DIRS")
         plugin_dirs.extend( [i.strip() for i in plugdir_list_str.split(',')])
-         
+
     # Done with the config file
 
+    if options.generate_softioc_files:
+        # Call the functions to output the config files for the softIoc
+        # binary, and then exit
+        # Note: have to strip the last colon from the prefix
+        generate_softioc_files(PROCESS_VARIABLES, PV_PREFIX[0:-1]) 
+        sys.exit(0)  # We always exit after calling this function
 
     # Import our plugins
     
