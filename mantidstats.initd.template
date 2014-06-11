@@ -15,6 +15,7 @@
 
 prog="mantidstats"
 exec=__REPLACE_ME_EXEC__
+config_exec=__REPLACE_ME_CONFIG_EXEC__
 
 # The default config file will be chosen down in start().
 # If you want to override the default, replace "" with the full
@@ -27,6 +28,9 @@ PIDDIR=__REPLACE_ME_PIDDIR__
 PIDFILE=${PIDDIR}/${prog}.pid
 RETVAL=0
 
+PROCSERV=/usr/bin/procServ
+PS_PORT=6789  # the port we'll tell procServ to use
+
 # Source the function library
 . /etc/rc.d/init.d/functions
 
@@ -34,26 +38,83 @@ RETVAL=0
 BEAMLINE=`hostname -s | sed 's/-.*//'`
 
 start() {
-	[ -x $exec ] || exit 5
+    [ -x $exec ] || exit 5
+    [ -x $config_exec ] || exit 5
+    [ -x $PROCSERV ] || exit 5
 
-	if [ -z $CONFIGFILE ]
-	then	
-		CONFIGFILE="/home/controls/${BEAMLINE}/mantidstats/mantidstats.conf"		
-	fi
+    if [[ -z $EPICS_BASE || -z $EPICS_HOST_ARCH ]]
+    then
+        echo "EPICS_BASE and EPICS_HOST_ARCH must be set before starting the statistics server."
+        echo "Aborting."
+        exit 1
+    fi
 
-	echo -n "Starting Mantid statistics server: "
-	daemon --pidfile="$PIDFILE" --user=$USER $exec -f $CONFIGFILE -p $PIDFILE
-	RETVAL=$?
-	echo  # add a newline after the [OK] or [FAILED] message
-	return $RETVAL
+    if [ -z $CONFIGFILE ]
+    then
+        CONFIGFILE="/home/controls/${BEAMLINE}/mantidstats/mantidstats.conf"		
+    fi
+
+    echo -n "Starting Mantid statistics server: "
+
+    # Auto-generate the config files for the soft IOC
+    # (Currently, the names are hard-coded to /tmp/mantidstats.cmd & /tmp/mantidstats.db
+    $config_exec -f $CONFIGFILE
+
+    # Start up the soft IOC
+    SOFTIOC="$EPICS_BASE/bin/$EPICS_HOST_ARCH/softIoc"
+    $PROCSERV -q $PS_PORT $SOFTIOC /tmp/mantidstats.cmd
+
+    daemon --pidfile="$PIDFILE" --user=$USER $exec -f $CONFIGFILE -p $PIDFILE
+    RETVAL=$?
+    echo  # add a newline after the [OK] or [FAILED] message
+    return $RETVAL
+}
+
+# procServ is designed to automatically restart the softIoc if it crashes,
+# so actually getting it to shut down is a little tricky
+stop_procserv() {
+
+    # First, make sure we can contact procServ.  Otherwise, we'll
+    # get stuck in an infinite loop...
+    echo "" | nc 127.0.0.1 $PS_PORT > /dev/null
+    if [ $? != "0" ]
+    then
+        return 1
+    fi
+    
+    # The auto-restart state is *probably* ON.  We send procServ a 
+    # ctrl-T to toggle it OFF
+    restart_state=`echo "" | nc 127.0.0.1 $PS_PORT | grep "auto restart"`
+    while [ -z "`echo $restart_state | grep 'OFF'`" ]
+    do
+        echo "" | nc 127.0.0.1 $PS_PORT > /dev/null
+        restart_state=`echo "" | nc 127.0.0.1 $PS_PORT | grep "auto restart"`
+    done
+
+    # Send the exit command to softIoc (via the procServ interface)
+    echo "exit" | nc 127.0.0.1 $PS_PORT > /dev/null
+
+    # Give softIoc a chance to shut down
+    shut_down=`echo "" | nc 127.0.0.1 $PS_PORT | grep "SHUT DOWN"`
+    while [ -z "$shut_down" ]
+    do
+        sleep 1
+        shut_down=`echo "" | nc 127.0.0.1 $PS_PORT | grep "SHUT DOWN"`
+    done
+
+    # Send a ctrl-Q to procServ to make it exit
+    echo "" | nc 127.0.0.1 $PS_PORT > /dev/null
+
+    return 0
 }
 
 stop() {
-	echo -n "Shutting down Mantid statistics server: "
-	killproc -p "$PIDFILE" $exec
-	RETVAL=$?
-	echo
-	return $RETVAL
+    echo -n "Shutting down Mantid statistics server: "
+    killproc -p "$PIDFILE" $exec
+    RETVAL=$?
+    stop_procserv # ToDo: do something useful with the return value...
+    echo
+    return $RETVAL
 }
 
 restart() {

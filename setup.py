@@ -67,6 +67,12 @@ def generate_init_script():
             outfile.write("%s/mantidstats\n"%BINDIR)
             continue
         
+        n = l.find('__REPLACE_ME_CONFIG_EXEC__')
+        if n != -1:
+            outfile.write(l[0:n])
+            outfile.write("%s/softIoc_config\n"%BINDIR)
+            continue
+        
         n = l.find('__REPLACE_ME_USER__')
         if n != -1:
             outfile.write(l[0:n])
@@ -170,7 +176,7 @@ if sys.argv[1] == 'bdist_rpm':
         create_temp_cfg_file()
 
 setup(name='MantidStatisticsServer',
-      version='0.91Beta',
+      version='0.95Beta',
       description="A utility to generate EPICS PV's from the SNS ADARA stream",
       long_description= long_desc,
       author='Ross Miller',
@@ -183,8 +189,11 @@ setup(name='MantidStatisticsServer',
       # actually installing.
       #py_modules = module_names,
       package_dir = {'': 'lib'},
-      packages = ['mantidstats','mantidstats.plugins'],
-      scripts = ['bin/mantidstats'],
+      packages = ['mantidstats','mantidstats.plugins',
+                  'epics', 'epics.autosave', 'epics.compat', 'epics.qt',
+                  'epics.devices', 'epics.wx'],
+      # Note: hopefully, the epics packages will only be temporary...
+      scripts = ['bin/mantidstats', 'bin/softIoc_config'],
       data_files = data_files,
       options = {'bdist_rpm':{'post_install' : INSTALL_SCRIPT_NAME,
                               'pre_uninstall' : UNINSTALL_SCRIPT_NAME}},

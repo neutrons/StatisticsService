@@ -1,7 +1,7 @@
 #!/bin/bash
 # This is really just a helper for the init.d script.
-# If you want to run the program manually, you're probably better off just
-# running python itself.
+# It runs the mantid stats program with the command line option to 
+# generate the config files the softIoc binary needs
 
 # First, figure out where we're installed so that we know how to find the
 # main module.  We do this with a combination of $0 and (maybe) $PWD.
@@ -16,7 +16,7 @@ then
     # Called from the current directory, just strip off the /bin
     STATS_HOME=${PWD}
 else
-    # Relative path - prepend $PWD
+    # Relative path - prepend $PWD    
     STATS_HOME="${PWD}/`dirname $0`"
 fi
 
@@ -57,4 +57,5 @@ fi
 # Dial back the number of openMP threads that the Mantid libs will spawn
 export OMP_NUM_THREADS=2
 
-python $STATS_HOME/lib/mantidstats/main.py "$@" 2>/dev/null >/dev/null &
+# The "$@" is mainly so we can pass in the -f <config file> parameter
+python $STATS_HOME/lib/mantidstats/main.py --generate_softioc_files "$@" 2>/dev/null >/dev/null
