@@ -46,7 +46,7 @@ import logging.handlers
 # Try to figure out where Mantid is installed and set sys.path accordingly
 if os.environ.has_key('MANTIDPATH'):
     #MANTIDPATH env var should be set by the Mantid installer.
-    sys.path.append( os.environ['MANTIDPATH'])
+    sys.path.insert( 0, os.environ['MANTIDPATH'])
 
 # If the env var wasn't set, we'll just hope for the best.  It's possible
 # the PYTHONPATH variable has already been modified to include the 
