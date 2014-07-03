@@ -8,7 +8,6 @@ Utility functions for generating the config files required by
 the EPICS softIoc binary
 '''
 
-
 def generateDbFile( fname, pv_names):
     '''
     Create the .db file that defines all the process variables the softIoc
@@ -63,9 +62,14 @@ def _writeRecord( dbfile, pv_name):
     # what some of the 'field' lines actually do, I might need multiple
     # specialized functions (ie: _writeFloatRecord, _writeIntRecord).
     # We'll have to see how all this shakes out...
-    
+
     dbfile.write( 'record( ao, "$(PREFIX):%s"){\n' % pv_name)
     dbfile.write( '  field(DTYP,"Soft Channel")\n')
+    dbfile.write( '  field(SCAN,"Passive")\n')
     dbfile.write( '  field(VAL,0)\n')
     dbfile.write( '  field(UDF,1)\n')
     dbfile.write( '}\n')
+
+
+
+
