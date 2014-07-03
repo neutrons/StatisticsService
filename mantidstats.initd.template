@@ -62,7 +62,7 @@ start() {
 
     # Start up the soft IOC
     SOFTIOC="$EPICS_BASE/bin/$EPICS_HOST_ARCH/softIoc"
-    $PROCSERV -q $PS_PORT $SOFTIOC /tmp/mantidstats.cmd
+    daemon --user=$USER $PROCSERV -q $PS_PORT $SOFTIOC /tmp/mantidstats.cmd
 
     daemon --pidfile="$PIDFILE" --user=$USER $exec -f $CONFIGFILE -p $PIDFILE
     RETVAL=$?
