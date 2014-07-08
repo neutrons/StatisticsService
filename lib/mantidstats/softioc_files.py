@@ -8,24 +8,6 @@ Utility functions for generating the config files required by
 the EPICS softIoc binary
 '''
 
-def generateDbFile( fname, pv_names):
-    '''
-    Create the .db file that defines all the process variables the softIoc
-    binary will manage.
-    
-    fname is the full pathname to the file to be created.  If it already
-      exists, it will be overwritten.
-    pv_names is a list of the process variable names
-    '''
-    
-    dbfile = open( fname, 'w')
-    # ToDo:  Add a few lines of comments saying the file is auto-generated
-    # and include a date and maybe some other stuff.  Need to figure out
-    # what constitutes a comment in that file, first.
-    for n in pv_names:
-        _writeRecord( dbfile, n)
-    dbfile.close()
-
 
 def generateCmdFile( fname, db_fname, prefix):
     '''
@@ -50,26 +32,40 @@ def generateCmdFile( fname, db_fname, prefix):
 
 
 
+# These are helpers that the various plugin modules can use to generate
+# the .db records for the PV's they output.  I expect these will grow
+# more numerous and complex as I figure out what the various fields are
+# useful for.
 
-def _writeRecord( dbfile, pv_name):
+def writeStandardAORecord( pv_name):
     '''
-    Outputs a single 'record' block to the .db file
+    Returns a string containing a single 'record' block of type 'ao' (analog
+    output).
 
-    dbfile is the file object we're writing to
+    pv_name is the name part of the process variable string.
+    '''
+    record = 'record( ao, "$(PREFIX):%s"){\n' % pv_name
+    record += '  field(DTYP,"Soft Channel")\n'
+    record += '  field(SCAN,"Passive")\n'
+    record += '  field(VAL,0)\n'
+    record += '  field(UDF,1)\n'
+    record += '}\n'
+    record += '\n'
+    return record
+
+def writeStandardWaveformRecord( pv_name, num_elements):
+    '''
+    Returns a single 'record' block of type 'waveform'
+
     pv_name is the name part of the process variable string
+    num_elements is the number of individual values in the waveform
     '''
-    # Note: For now I just need one of these functions.  Once I figure out
-    # what some of the 'field' lines actually do, I might need multiple
-    # specialized functions (ie: _writeFloatRecord, _writeIntRecord).
-    # We'll have to see how all this shakes out...
-
-    dbfile.write( 'record( ao, "$(PREFIX):%s"){\n' % pv_name)
-    dbfile.write( '  field(DTYP,"Soft Channel")\n')
-    dbfile.write( '  field(SCAN,"Passive")\n')
-    dbfile.write( '  field(VAL,0)\n')
-    dbfile.write( '  field(UDF,1)\n')
-    dbfile.write( '}\n')
-
-
-
+    record = 'record( waveform, "$(PREFIX):%s"){\n' % pv_name
+    record += '  field(DTYP,"Soft Channel")\n'
+    record += '  field(SCAN,"Passive")\n'
+    record += '  field(FTVL,"LONG")\n'
+    record += '  field(NELM,"%d")\n'%num_elements
+    record += '  field(UDF,1)\n'
+    record += '}\n'
+    return record
 

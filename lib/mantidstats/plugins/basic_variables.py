@@ -6,6 +6,8 @@ Created on Mar 10, 2014
 Holds calculation functions for some of the more basic process variables
 '''
 
+from softioc_files import writeStandardAORecord
+
 # -----------------------------------------------------------------------------
 
 def calc_evtcnt( chunkWS, **extra_kwargs):
@@ -163,18 +165,31 @@ def calc_beam_mon_cnt_post( accumWS, pv_name, **kwargs):
         return -1
 
 # -----------------------------------------------------------    
+
+# Because all the PV's this module calculates are single values, we
+# only need one fairly simple function for generating their db records
+def generateDbRecord( pv_name, **kwargs):
+    '''
+    Returns a string defining the database record for the specified pv_name
+    
+    Called by the main program when it needs to generate the config files
+    for the softIOC program.
+    '''
+    return writeStandardAORecord( pv_name)
+
 # -----------------------------------------------------------
 
 def register_pvs():
     '''
     Called by the main plugin loader.  This function sets up the mappings
     between process variable names and the callables that calculate their
-    values.
+    values and generate their .db records.
     '''
         
     pv_functions_chunk = {}
     pv_functions_post = {}
-    
+    pv_functions_dbrecord = {}
+
     pv_functions_chunk[r'^PROTONCHARGE$'] = calc_protoncharge    
     pv_functions_chunk[r'^RUNNUM$'] = calc_runnum
     pv_functions_chunk[r'^EVTCNT$'] = calc_evtcnt
@@ -186,6 +201,18 @@ def register_pvs():
     # should match M1CNT, M2CNT_POST...M99CNT_POST...M1001CNT_POST, etc..
     pv_functions_post[r'^M[0-9]+CNT_POST$'] = calc_beam_mon_cnt_post
     
-    return (pv_functions_chunk, pv_functions_post)
+    # Map the same regex strings to the function that generates records for
+    # the softIOC program.
+    # Note: If I were really talented, there would just be a single regex
+    # string that matched *ALL* the above strings.  But I'm not, so I'll add
+    # multiple entries to the map.
+    # Note 2: Make sure these regex strings are identical to the ones above!
+    pv_functions_dbrecord[r'^PROTONCHARGE$']    = generateDbRecord    
+    pv_functions_dbrecord[r'^RUNNUM$']          = generateDbRecord
+    pv_functions_dbrecord[r'^EVTCNT$']          = generateDbRecord
+    pv_functions_dbrecord[r'^EVTCNT_POST$']     = generateDbRecord
+    pv_functions_dbrecord[r'^M[0-9]+CNT$']      = generateDbRecord
+    pv_functions_dbrecord[r'^M[0-9]+CNT_POST$'] = generateDbRecord
     
+    return (pv_functions_chunk, pv_functions_post, pv_functions_dbrecord)
     

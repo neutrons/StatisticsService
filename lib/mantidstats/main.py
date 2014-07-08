@@ -19,9 +19,7 @@ TODO List:
   they encounter errors.  Have the ChunkProcessing and PostProcessing
   algorithms trap the exceptions and set the appropriate EPICS error flags for
   the PV 
-- Need to remove the hard-coded path extension for importing pcaspy
-- Add units to the entries in pvdb
-- Figure out if we should add the asyn field to entries in pvdb
+- Add units to records in the softIoc db file
 
 Config related tasks:
 - Figure out global config options ( update rate for live listener, preserve events, locations for plugin dirs?)
@@ -70,7 +68,7 @@ Mantid has been installed.
 
 from epics import PV
 
-import softioc_files
+from softioc_files import generateCmdFile
 
 # -------------------------------------------------------------------------
 # Commented out for now because pcaspy package doesn't play nice with
@@ -224,7 +222,7 @@ AlgorithmFactory.subscribe( PostProcessing())
 
 
 
-def import_plugins( plugin_dirs, chunk_regex, post_regex):
+def import_plugins( plugin_dirs, chunk_regex, post_regex, db_regex):
     '''
     Import plugins for calculating PV's
     
@@ -245,7 +243,7 @@ def import_plugins( plugin_dirs, chunk_regex, post_regex):
                         # OK, found a python file.  Import register_pvs
                         m = __import__(f[:-3])
                         try:
-                            (chunk, post) = m.register_pvs()
+                            (chunk, post, db) = m.register_pvs()
                             
                             # compile the regex strings returned by
                             # register_pvs() into compiled re objects
@@ -255,6 +253,9 @@ def import_plugins( plugin_dirs, chunk_regex, post_regex):
                             
                             for k in post:
                                 post_regex[re.compile(k)] = post[k]
+
+                            for k in db:
+                                db_regex[re.compile(k)] = db[k]
 
                         except AttributeError:
                             logger.warning( "Module '%s' in directory '%s' has no 'register_pvs' function.  Ignoring this module" %(f, d))
@@ -325,7 +326,7 @@ def start_live_listener( instrument, is_restart = True):
     
     mld_alg = sld_return[-1] # last element in sld_return is the MonitorLiveData algorithm
     # Wait for the mld algorithm to actually start
-    # TOD: Put some kind of timeout in here!
+    # TODO: Put some kind of timeout in here!
     if not mld_alg.isRunning():
         logger.debug( "Waiting for MonitorLiveData algorithm to start")
         time.sleep(0.1)
@@ -333,14 +334,34 @@ def start_live_listener( instrument, is_restart = True):
     logger.debug( "MonitorLiveData algorithm now running")
     return mld_alg   
 
-def generate_softioc_files(pv_names, prefix):
+def generate_softioc_files(pv_names, prefix, db_regex):
     '''
     Writes on the config files needed for the softIoc binary
     '''
     db_name = '/tmp/mantidstats.db'
     cmd_name = '/tmp/mantidstats.cmd'
-    softioc_files.generateDbFile(db_name, pv_names)
-    softioc_files.generateCmdFile(cmd_name, db_name, prefix)
+    
+    logger = logging.getLogger( LOGGER_NAME)
+    
+    generateCmdFile(cmd_name, db_name, prefix)
+    
+    # Now write out the .db file containing the records for all the PV's
+    db_file = open( db_name, 'w')
+    for n in pv_names:
+        function_found = False
+        for r in db_regex:
+            if r.match(n):
+                function_found = True
+                db_file.write( db_regex[r](n))
+                break
+        if function_found == False:
+            logger.error( "Could not find record generation function for "
+                          "PV '%s'" % n)
+            # TODO: This should probably throw an exception
+        
+    db_file.close()
+        
+    
     
         
 def write_pidfile( filename):
@@ -513,13 +534,6 @@ def main_continued( options):
 
     # Done with the config file
 
-    if options.generate_softioc_files:
-        # Call the functions to output the config files for the softIoc
-        # binary, and then exit
-        # Note: have to strip the last colon from the prefix
-        generate_softioc_files(PROCESS_VARIABLES, PV_PREFIX[0:-1]) 
-        sys.exit(0)  # We always exit after calling this function
-
     # Import our plugins
     
     # The default plugin dir is a directory named 'plugins' in the same dir
@@ -540,8 +554,19 @@ def main_continued( options):
     
     chunk_regex = {}
     post_regex = {}
-    import_plugins( plugin_dirs, chunk_regex, post_regex)
+    db_regex = {}
+    import_plugins( plugin_dirs, chunk_regex, post_regex, db_regex)
     
+    
+    # Call the functions to output the config files for the softIoc
+    # binary, and then exit
+    # Note: this seems like an odd place to perform this step, but we
+    # had to wait until import_plugins() had been called, because we
+    # need db_regex
+    if options.generate_softioc_files:
+        # have to strip the last colon from the prefix
+        generate_softioc_files(PROCESS_VARIABLES, PV_PREFIX[0:-1], db_regex) 
+        sys.exit(0)  # We always exit after calling this function
     
     
     # Now match all the requested PV names to a pattern in chunk_regex or

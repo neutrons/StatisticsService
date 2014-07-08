@@ -12,6 +12,7 @@ import logging
 #import logging.handlers
 import math
 
+from softioc_files import writeStandardWaveformRecord
 # -----------------------------------------------------------------------------
 
 
@@ -116,7 +117,8 @@ class calc_evthisto:
         
         if not self._is_init:
             self._finish_init( chunkWS)
-            
+        
+        # Zero the entries in the output array when the run number changes    
         if self._run_num != run_num:
             self._reset()
             self._run_num = run_num
@@ -127,6 +129,7 @@ class calc_evthisto:
         
         if total_event_count > 0:
             running_event_count = 0
+            
             # loop through all the spectra in the workspace
             num_spectra = chunkWS.getNumberHistograms()
             for i in range(num_spectra):
@@ -187,14 +190,14 @@ class calc_evthisto:
         #
         # The min and max theta values are: -0.424492 & 2.652780 radians
         # Given that each pixel is 5.056296e-3 radians wide, the horizontal size
-        # of our output array is: 608.6 (We'll round up to 609.) 
+        # of our output array is: 608.6 (We'll round up to 610.) 
         #
         # The min and max Y values (in meters) are: -1.222825 & 1.384750
         # Given that each pixel is 0.00326531982422  m tall, the vertical size
-        # of our output array is: 798.6  (We'll round up to 799.)
+        # of our output array is: 798.6  (We'll round up to 800.)
         #
         # The coordinate system we use in the output array will put 0,0 at
-        # the top, left corner and 610,800 at the bottom, right corner.
+        # the top, left corner and 609,799 at the bottom, right corner.
         # Because of the coordinate system in use at the beamline, this
         # means that 0,0 in the output array will correspond to 
         # MAX_THETA,MAX_Y and and 610,800 will be MIN_THETA,MIN_Y. 
@@ -366,12 +369,23 @@ class calc_evthisto:
         return math.sqrt((x*x) + (y*y) + (z*z))
     
     def _approx_equal(self, a, b, sigfig):
-        return abs(a-b) < (1.0 / math.pow(10, sigfig))
-    
-        
-        
+        return abs(a-b) < (1.0 / math.pow(10, sigfig))        
 
-# End of class calc_evthisto         
+# End of class calc_evthisto      
+   
+# -----------------------------------------------------------    
+
+# This module only calculates a single PV, so the function to create the
+# EPICS db record is pretty simple
+def generateDbRecord( pv_name, **kwargs):
+    '''
+    Returns a string defining the database record for the specified pv_name
+    
+    Called by the main program when it needs to generate the config files
+    for the softIOC program.
+    '''
+    ce = calc_evthisto()
+    return writeStandardWaveformRecord( pv_name, (ce._OUTPUT_ARRAY_WIDTH * ce._OUTPUT_ARRAY_HEIGHT) )
         
 def register_pvs():
     '''
@@ -381,10 +395,11 @@ def register_pvs():
     '''
         
     pv_functions_chunk = {}
-    pv_functions_post = {}
+    pv_functions_dbrecord = {}
 
     # Match 'EVTHISTO' exactly    
     pv_functions_chunk[r'^EVTHISTO$'] = calc_evthisto() # pass back an instance of the class
+    pv_functions_dbrecord[r'^EVTHISTO$'] = generateDbRecord
     
     # Note: No post processing, so returning an empty dict
-    return (pv_functions_chunk, pv_functions_post)
+    return (pv_functions_chunk, {}, pv_functions_dbrecord)
