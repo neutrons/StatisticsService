@@ -38,11 +38,9 @@ the angle off the X (or Z axis)
 
 Each "16Pack" is flat, but they're arranged in a section of a cylinder around
 the Y axis.  Thus, Y values (in meters) for each pixel should map pretty much
-directly to the Y value in the output array.
-
-The python interface doesn't expose the getSpherical() function in Mantid:Kernel:V3D, but it does
-expose angle().  So, we'll use the angle between the Z axis and the X & Z coordinates of the
-pixel (we'll set the Y coord to 0) to map into the X value of the output array.
+directly to the Y value in the output array.  To map the X value of the output
+array, we'll calculate the angle off the Z axis on the X-Z plane
+(arctan (X/Z)).
 '''
 
 
@@ -133,8 +131,7 @@ class calc_evthisto:
             # loop through all the spectra in the workspace
             num_spectra = chunkWS.getNumberHistograms()
             for i in range(num_spectra):
-                event_list = chunkWS.getEventList(i)
-                num_events = event_list.getNumberEvents()
+                num_events = chunkWS.getEventList(i).getNumberEvents()
                 if num_events > 0:
                     try:
                         (x,y) = self._pixel_id_map[i]
