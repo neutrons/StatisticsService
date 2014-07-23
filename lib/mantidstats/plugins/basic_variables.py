@@ -8,6 +8,7 @@ Holds calculation functions for some of the more basic process variables
 
 from softioc_files import writeStandardAORecord
 
+import logging
 # -----------------------------------------------------------------------------
 
 def calc_evtcnt( chunkWS, **extra_kwargs):
@@ -44,7 +45,7 @@ def calc_runnum( run_num, **extra_kwargs):
     
     # This one is just stupid simple...    
     return run_num   
-
+    
 # -----------------------------------------------------------------------------
 
 def calc_protoncharge( chunkWS, **extra_kwargs):
@@ -73,11 +74,57 @@ def calc_protoncharge( chunkWS, **extra_kwargs):
         # the proton_charge property is the charge for each pulse.  We need to
         # sum all of those charge values
         p_charge = run.getProperty('proton_charge')
-        for n in range( p_charge.size()):
-            calc_protoncharge.accum_charge += p_charge.nthValue(n)
-    
+        
+        calc_protoncharge.accum_charge += p_charge.value.sum()
+        # Note: the value attribute is a NumPy array
+        
     return calc_protoncharge.accum_charge
         
+# -----------------------------------------------------------
+
+def calc_calc_power( chunkWS, **extra_kwargs):
+    '''
+    Calculates the CALCULATED_POWER process variable
+    '''
+    # Note: This variable is mainly used as a sanity check on the proton charge PV
+
+    _BEAM_ENERGY = 9.395e8  # 939.5 MeV in eV
+    logger = logging.getLogger("calc_calc_power")
+    
+    run = chunkWS.run()
+    # For reasons that are unclear, calling run.getProtonCharge() causes the program to
+    # crash with an error about unknown property "gd_prtn_chrg" 
+    if run.hasProperty( 'proton_charge'):
+        # the proton_charge property is the charge for each pulse.  We need to
+        # sum all of those charge values
+        p_charge = run.getProperty('proton_charge')
+        
+        if (p_charge.size() > 1):
+            # delta_t is in seconds, delta_c is in coulombs
+            delta_t = (p_charge.lastTime() - p_charge.firstTime()).total_microseconds()/1000000.0
+            
+            accum_charge = p_charge.value.sum()
+            accum_charge /= 1.0e12 # convert to coulombs from picocoulombs
+            
+            #logger.debug( "elapsed time for charge: %e s" % (finish - start))
+            #logger.debug( "delta_t: %e" % delta_t)
+            #logger.debug( "charge: %e" % accum_charge)
+                    
+            calc_calc_power.prev_time = p_charge.lastTime()
+            calc_calc_power.prev_pcharge = p_charge.lastValue()        
+            
+            return _BEAM_ENERGY * accum_charge / delta_t
+        else:
+            logger.warning( "'proton_charge' time series property has "
+                            "%d values"%p_charge.size())
+    else:
+        # Don't have a proton_charge property.  Should we throw an exception?
+        # I'm not certain if there's a situation where we might be called before the
+        # proton charge property is created. I don't think there is...
+        pass
+    
+    return 0  # Normally, we won't get here
+
 # -----------------------------------------------------------
 
 def calc_evtcnt_post( accumWS, **extra_kwargs):
@@ -91,7 +138,7 @@ def calc_evtcnt_post( accumWS, **extra_kwargs):
 
 class calc_beam_mon_cnt:
     '''
-    Calculate values for beam monitor event count process variables
+    Calculate values for beam monitor event count process variable
     '''
     
     def __init__(self):
@@ -190,7 +237,8 @@ def register_pvs():
     pv_functions_post = {}
     pv_functions_dbrecord = {}
 
-    pv_functions_chunk[r'^PROTONCHARGE$'] = calc_protoncharge    
+    pv_functions_chunk[r'^PROTONCHARGE$'] = calc_protoncharge
+    pv_functions_chunk[r'^CALCULATED_POWER$'] = calc_calc_power    
     pv_functions_chunk[r'^RUNNUM$'] = calc_runnum
     pv_functions_chunk[r'^EVTCNT$'] = calc_evtcnt
     pv_functions_post[r'^EVTCNT_POST$'] = calc_evtcnt_post
@@ -207,12 +255,13 @@ def register_pvs():
     # string that matched *ALL* the above strings.  But I'm not, so I'll add
     # multiple entries to the map.
     # Note 2: Make sure these regex strings are identical to the ones above!
-    pv_functions_dbrecord[r'^PROTONCHARGE$']    = generateDbRecord    
-    pv_functions_dbrecord[r'^RUNNUM$']          = generateDbRecord
-    pv_functions_dbrecord[r'^EVTCNT$']          = generateDbRecord
-    pv_functions_dbrecord[r'^EVTCNT_POST$']     = generateDbRecord
-    pv_functions_dbrecord[r'^M[0-9]+CNT$']      = generateDbRecord
-    pv_functions_dbrecord[r'^M[0-9]+CNT_POST$'] = generateDbRecord
+    pv_functions_dbrecord[r'^PROTONCHARGE$']     = generateDbRecord
+    pv_functions_dbrecord[r'^CALCULATED_POWER$'] = generateDbRecord    
+    pv_functions_dbrecord[r'^RUNNUM$']           = generateDbRecord
+    pv_functions_dbrecord[r'^EVTCNT$']           = generateDbRecord
+    pv_functions_dbrecord[r'^EVTCNT_POST$']      = generateDbRecord
+    pv_functions_dbrecord[r'^M[0-9]+CNT$']       = generateDbRecord
+    pv_functions_dbrecord[r'^M[0-9]+CNT_POST$']  = generateDbRecord
     
     return (pv_functions_chunk, pv_functions_post, pv_functions_dbrecord)
     
