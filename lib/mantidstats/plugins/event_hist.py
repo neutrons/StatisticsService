@@ -110,8 +110,10 @@ class calc_evthisto:
         any new events
         '''
         
-        logger = logging.getLogger(__name__)
-        logger.debug( "Inside __call__")
+        # TODO: main.py defines the LOGGER_NAME variable.  It'd be nice if
+        # that definition could make it down into this module somehow...
+        logger = logging.getLogger( "MantidStats::%s"% __name__)
+        #logger.debug( "Inside __call__")
         
         if not self._is_init:
             self._finish_init( chunkWS)
@@ -152,7 +154,8 @@ class calc_evthisto:
             logger.debug( "0 events in this chunk workspace")
             
             
-        logger.debug("About to return from __call__")
+        #logger.debug("About to return from __call__")
+        
         # This looks a little strange, but it works.  'flat' is an iterator
         # over the entire array and the value attribute on PV's (which this
         # is passed directly to) wants a sequence (when the PV type is
@@ -200,7 +203,7 @@ class calc_evthisto:
         # MAX_THETA,MAX_Y and and 610,800 will be MIN_THETA,MIN_Y. 
         
                 
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger( "MantidStats::%s"% __name__)
         logger.debug( "Inside _finish_init()")
         
         self._validate_geometry(chunkWS)
@@ -276,7 +279,7 @@ class calc_evthisto:
         the geometry, it throws an exception.
         '''
         
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger( "MantidStats::%s"% __name__)
         logger.debug( "Validating instrument geometry")
         
         ins = chunkWS.getInstrument()
