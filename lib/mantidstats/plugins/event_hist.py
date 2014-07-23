@@ -72,8 +72,8 @@ class calc_evthisto:
         # means somebody messed with the instrument definition file.)
         # See _finish_init()
         self._NUM_PIXELS = 372736
-        self._MIN_THETA = -0.424492
-        self._MAX_THETA = 2.652780
+        self._MIN_ALPHA = -0.424492
+        self._MAX_ALPHA = 2.652780
         self._MIN_Y = -1.222825
         self._MAX_Y = 1.384750
         self._AVERAGE_RADIUS = 2.590189
@@ -184,11 +184,9 @@ class calc_evthisto:
         # output array.  Since the columns aren't so neat, we'll use the
         # angle relative to the Z axis (ignoring the Y value and just
         # concentrating on 2D space) to map pixels into appropriate spots in
-        # the output array.  I'm calling this angle theta.
-        # TODO: Verify that the 'theta' I see references to in the source
-        # code means the same thing.
+        # the output array.  I'm calling this angle alpha.
         #
-        # The min and max theta values are: -0.424492 & 2.652780 radians
+        # The min and max alpha values are: -0.424492 & 2.652780 radians
         # Given that each pixel is 5.056296e-3 radians wide, the horizontal size
         # of our output array is: 608.6 (We'll round up to 610.) 
         #
@@ -200,7 +198,7 @@ class calc_evthisto:
         # the top, left corner and 609,799 at the bottom, right corner.
         # Because of the coordinate system in use at the beamline, this
         # means that 0,0 in the output array will correspond to 
-        # MAX_THETA,MAX_Y and and 610,800 will be MIN_THETA,MIN_Y. 
+        # MAX_ALPHA,MAX_Y and and 609,799 will be MIN_ALPHA,MIN_Y. 
         
                 
         logger = logging.getLogger( "MantidStats::%s"% __name__)
@@ -215,7 +213,7 @@ class calc_evthisto:
         # A couple of constants that get used repeatedly down below.
         # Calculated once here to save time
         total_height = self._MAX_Y - self._MIN_Y
-        total_angle = self._MAX_THETA - self._MIN_THETA
+        total_angle = self._MAX_ALPHA - self._MIN_ALPHA
         
         logger.debug( "Creating detector ID to output coordinate map")
         for ws_index in range( num_spectra):
@@ -228,9 +226,9 @@ class calc_evthisto:
                 # except in this one check
                 
             pos = det.getPos()
-            theta = self._compute_theta( pos.getX(), pos.getZ())
+            alpha = self._compute_alpha( pos.getX(), pos.getZ())
             y = pos.getY()
-            outX = int(((self._MAX_THETA - theta) / total_angle) * self._OUTPUT_ARRAY_WIDTH - 1)          
+            outX = int(((self._MAX_ALPHA - alpha) / total_angle) * self._OUTPUT_ARRAY_WIDTH - 1)          
             outY = int(((self._MAX_Y - y) / total_height) * self._OUTPUT_ARRAY_HEIGHT - 1)
             
             self._pixel_id_map[ws_index] = (outX, outY);  
@@ -290,8 +288,8 @@ class calc_evthisto:
                                  "actual value is %d"%(self._NUM_PIXELS,
                                                        chunkWS.getNumberHistograms()))
         
-        min_theta = 999999.0
-        max_theta = -9999999.0       
+        min_alpha = 999999.0
+        max_alpha = -9999999.0       
         min_y = 9999999.0
         max_y = -9999999.0
         min_radius = 99999.0
@@ -317,11 +315,11 @@ class calc_evthisto:
             elif (temp > max_y):
                 max_y = temp
                 
-            temp = self._compute_theta( pos.getX(), pos.getZ())
-            if (temp < min_theta):
-                min_theta = temp
-            elif (temp > max_theta):
-                max_theta = temp
+            temp = self._compute_alpha( pos.getX(), pos.getZ())
+            if (temp < min_alpha):
+                min_alpha = temp
+            elif (temp > max_alpha):
+                max_alpha = temp
                 
             temp = self._compute_radius( pos.getX(), pos.getY(), pos.getZ())
             if (temp < min_radius):
@@ -332,15 +330,15 @@ class calc_evthisto:
             radius_sum += temp
             
         
-        if not self._approx_equal(min_theta, self._MIN_THETA, 6):
-            raise GeometryError( "Unexpected minimum theta value. Expected "
+        if not self._approx_equal(min_alpha, self._MIN_ALPHA, 6):
+            raise GeometryError( "Unexpected minimum alpha value. Expected "
                                  "%f, but actual value is %f"%
-                                 (self._MIN_THETA, min_theta))
+                                 (self._MIN_ALPHA, min_alpha))
             
-        if not self._approx_equal(max_theta, self._MAX_THETA, 6):
-            raise GeometryError( "Unexpected maximum theta value. Expected "
+        if not self._approx_equal(max_alpha, self._MAX_ALPHA, 6):
+            raise GeometryError( "Unexpected maximum alpha value. Expected "
                                  "%f, but actual value is %f"%
-                                 (self._MAX_THETA, max_theta))
+                                 (self._MAX_ALPHA, max_alpha))
             
         if not self._approx_equal(min_y, self._MIN_Y, 6):
             raise GeometryError( "Unexpected minimum Y value. Expected "
@@ -361,8 +359,8 @@ class calc_evthisto:
         logger.debug( "Instrument geometry validated.")
         
                 
-    def _compute_theta(self, x, z):
-        # todo - probably don't need a separate function for this...
+    def _compute_alpha(self, x, z):
+        #TODO: probably don't need a separate function for this...
         return math.atan2( x, z)  # arctan of x/z
     
     def _compute_radius(self, x, y, z):
