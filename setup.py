@@ -176,7 +176,7 @@ if sys.argv[1] == 'bdist_rpm':
         create_temp_cfg_file()
 
 setup(name='MantidStatisticsServer',
-      version='0.95Beta',
+      version='0.96Beta',
       description="A utility to generate EPICS PV's from the SNS ADARA stream",
       long_description= long_desc,
       author='Ross Miller',
