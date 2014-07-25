@@ -228,8 +228,8 @@ class calc_evthisto:
             pos = det.getPos()
             alpha = self._compute_alpha( pos.getX(), pos.getZ())
             y = pos.getY()
-            outX = int(((self._MAX_ALPHA - alpha) / total_angle) * self._OUTPUT_ARRAY_WIDTH - 1)          
-            outY = int(((self._MAX_Y - y) / total_height) * self._OUTPUT_ARRAY_HEIGHT - 1)
+            outX = int(((self._MAX_ALPHA - alpha) / total_angle) * (self._OUTPUT_ARRAY_WIDTH - 1))
+            outY = int(((self._MAX_Y - y) / total_height) * (self._OUTPUT_ARRAY_HEIGHT - 1))
             
             self._pixel_id_map[ws_index] = (outX, outY);  
         
@@ -240,9 +240,20 @@ class calc_evthisto:
         for n in range(len(locations) - 1):
             if locations[n] == locations[n+1]:
                 logger.error( "Duplicate mapping into output array at %d,%d"%(locations[n][0], locations[n][1]))
-                #TODO: now what do we do?
-        
+                #TODO: What do we do in this case?
         logger.debug("Duplicate checks complete.")        
+                
+        logger.debug( "Checking for invalid coordinates in detector ID to output coordinate map")
+        for location in self._pixel_id_map:
+            outX = self._pixel_id_map[location][0];
+            outY = self._pixel_id_map[location][1];
+            if outX < 0 or outX >= self._OUTPUT_ARRAY_WIDTH or \
+               outY < 0 or outY >= self._OUTPUT_ARRAY_HEIGHT:
+                logger.error( "Pixel ID %d maps to invalid coordinates in the"
+                              " output array (%d,%d).  Remapping to 0,0." %
+                              (location, outX, outY))
+                self._pixel_id_map[location] = (0,0)
+        logger.debug("Invalid mapping checks complete.")        
                 
         self._reset() # set the initial value for the output array
         self._is_init = True
